@@ -1,0 +1,182 @@
+:root{
+            --card-bg:#fff;
+            --page-bg:#f6f7f9;
+            --muted:#6b7280;
+            --accent:#111827;
+            --border:#e6e9ee;
+            --text-color:#111111;
+            --btn-bg:#111111;
+            --btn-text:#ffffff;
+            --badge-bg:#111111;
+            --spinner-border: rgba(0,0,0,0.12);
+            --spinner-top: rgba(0,0,0,0.7);
+            --success-bg: #10b981;
+            --error-bg: #ef4444;
+                --download-badge-bg: #e6f7ef;
+                --download-badge-text: #065f46;
+                    --counter-flash-bg: #0b74de;
+                    --counter-flash-text: #ffffff;
+            --modal-bg: #fff;
+            --modal-text: var(--text-color);
+            --row-hover-bg: #fbfdff;
+        }
+        /* Dark mode overrides: add class 'dark-mode' to <body> */
+        .dark-mode {
+            --card-bg:#0b1220;
+            --page-bg:#071018;
+            --muted:#9aa4b2;
+            --accent:#ffffff;
+            --border:#1f2937;
+            --text-color:#ffffff;
+            --btn-bg:#ffffff;
+            --btn-text:#111111;
+            --badge-bg:#ffffff;
+            --spinner-border: rgba(255,255,255,0.12);
+            --spinner-top: rgba(255,255,255,0.9);
+            --success-bg: #059669;
+            --error-bg: #ef4444;
+                --download-badge-bg: #064e3b;
+                --download-badge-text: #dff7ea;
+                --counter-flash-bg: #60a5fa;
+                --counter-flash-text: #05203a;
+                --modal-bg: #071018;
+                --modal-text: var(--text-color);
+            --row-hover-bg: rgba(255,255,255,0.03);
+        }
+    html,body{height:100%;margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
+        .page{max-width:1100px;margin:28px auto;padding:18px}
+    .card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 6px 18px rgba(15,23,42,0.06);transition:background-color .25s ease,box-shadow .25s ease}
+        .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
+        .controls .group{display:flex;flex-direction:column;gap:6px}
+        label{font-size:13px;color:var(--muted)}
+        select,input[type=text],input[type=date]{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff}
+    .title-row{display:flex;justify-content:space-between;align-items:center;margin:12px 0 18px}
+        h1{margin:0;font-size:28px;letter-spacing:-0.02em}
+        table{width:100%;border-collapse:collapse;margin-top:6px}
+        thead th{font-weight:600;padding:12px 10px;border-bottom:1px solid var(--border);background:transparent;text-align:left}
+    tbody td{padding:14px 10px;border-bottom:1px solid var(--border);color:var(--text-color)}
+    tbody tr:hover td{background:var(--row-hover-bg)}
+    /* In dark mode ensure hovered row text (including links) uses the page text color */
+    .dark-mode tbody tr:hover td,
+    .dark-mode tbody tr:hover td .doc-name,
+    .dark-mode tbody tr:hover td a{
+        color: var(--text-color);
+    }
+    .doc-name{font-weight:500}
+    .date-col{text-align:left;color:var(--muted)}
+    /* master checkbox / badge */
+        .master-wrap{display:flex;align-items:center;gap:10px}
+        #master-check{width:18px;height:18px;cursor:pointer;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
+    #selected-count{font-size:12px;color:var(--btn-text);background:var(--badge-bg);padding:6px 8px;border-radius:999px}
+    th.sortable{cursor:pointer;user-select:none}
+    th.sortable.active-sort{color:var(--accent);font-weight:700}
+    /* icons sizing */
+    #sort-arrow, #sort-arrow-data{display:inline-flex;align-items:center;margin-left:8px;color:var(--muted)}
+    .sort-icon{width:10px;height:10px;display:inline-block;vertical-align:middle;line-height:10px}
+    .sort-icon svg{width:10px;height:10px;display:block}
+    /* fallback <i> sizing */
+    .sort-icon i{font-style:normal;font-size:10px;line-height:10px;display:inline-block}
+    /* In dark mode make sort arrow icons fully visible (use --accent which is white) */
+    .dark-mode .sort-icon,
+    .dark-mode #sort-arrow,
+    .dark-mode #sort-arrow-data{
+        color: var(--accent);
+    }
+    .dark-mode .sort-icon svg,
+    .dark-mode .sort-icon path,
+    .dark-mode .sort-icon g{
+        fill: var(--accent) !important;
+        stroke: var(--accent) !important;
+    }
+    .dark-mode .sort-icon i{color:var(--accent)}
+    /* In dark mode make the sun toggle icon black for contrast against the white moon */
+    .dark-mode .toggle-sun svg,
+    .dark-mode .toggle-sun path,
+    .dark-mode .toggle-sun g{
+        fill: var(--btn-text) !important;
+        stroke: var(--btn-text) !important;
+        color: var(--btn-text) !important;
+    }
+    /* small spinner used while sorting */
+    .spinner{width:10px;height:10px;border:1.5px solid var(--spinner-border);border-top-color:var(--spinner-top);border-radius:50%;display:inline-block;vertical-align:middle;box-sizing:border-box;animation:spin .8s linear infinite}
+    @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+        /* Download button */
+    .download-btn{background:var(--btn-bg);color:var(--btn-text);padding:12px 18px;border-radius:10px;border:none;cursor:pointer;font-weight:600;transition:background-color .2s ease,color .2s ease}
+        /* Dark mode toggle button styling */
+        #dark-mode-toggle{border:1px solid var(--border);padding:6px 8px;border-radius:8px;cursor:pointer;background:transparent;color:var(--muted);display:inline-flex;align-items:center;gap:6px;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
+        #dark-mode-toggle .toggle-icon{display:inline-block;line-height:0;transition:opacity .25s ease,transform .25s ease;opacity:0;transform:scale(.9);width:18px;height:18px}
+        #dark-mode-toggle .toggle-icon svg{width:18px;height:18px;display:block}
+        #dark-mode-toggle .toggle-icon.visible{opacity:1;transform:scale(1)}
+        .download-area{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
+        /* Small screen: make table rows stacked cards */
+        @media (max-width:720px){
+            .controls{flex-direction:column;align-items:stretch}
+            .title-row{flex-direction:column;align-items:flex-start;gap:10px}
+            table thead{display:none}
+            table, tbody, tr, td{display:block;width:100%}
+            tbody tr{margin:8px 0;padding:10px;border-radius:10px;background:#fff;box-shadow:0 1px 0 rgba(16,24,40,0.03)}
+            tbody td{display:flex;justify-content:space-between;padding:12px}
+            tbody td::before{content:attr(data-label);color:var(--muted);font-size:12px;margin-right:8px}
+        }
+
+    /* Estilo do modal */
+    .modal {
+  display: none;
+  position: fixed;
+  z-index: 2000;
+  left: 0; top: 0;
+  width: 100%; height: 100%;
+  background: rgba(0,0,0,0.6);
+}
+.modal-content {
+    position: relative;
+    background: var(--modal-bg);
+    margin: 12% auto;
+    padding: 20px;
+    border-radius: 12px;
+    width: 420px;
+    text-align: center;
+    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
+    color: var(--modal-text);
+}
+.modal-content h2 {
+    font-size: 18px;
+    margin: 0 0 6px;
+}
+.modal-content .modal-body{display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px}
+.modal-spinner{width:72px;height:72px;border:8px solid var(--spinner-border);border-top-color:var(--spinner-top);border-radius:50%;box-sizing:border-box;animation:spin .8s linear infinite}
+.modal-icon{width:64px;height:64px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:28px}
+.modal-icon.success{background:var(--success-bg);color:#fff}
+.modal-icon.error{background:var(--error-bg);color:#fff}
+.modal-content .msg{font-size:15px;color:var(--muted);max-width:360px}
+.modal-actions{display:flex;gap:8px;margin-top:6px}
+.modal .close {
+  position: absolute;
+  top: 10px; right: 15px;
+  font-size: 22px;
+  font-weight: bold;
+  color: #aaa;
+  cursor: not-allowed;
+  pointer-events: none;
+}
+.modal .close.enabled {
+  color: #333;
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* Badge to indicate a downloaded document */
+.baixado-badge{display:inline-block;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+
+/* Small counter shown near the header */
+.downloaded-counter{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+
+/* micro-flash animation for counter */
+.downloaded-counter .count-val{display:inline-block;padding:3px 6px;border-radius:6px;transition:transform .18s ease}
+.downloaded-counter .count-val.flash{animation:counterFlash .45s ease both}
+@keyframes counterFlash{
+    0% { transform: scale(1); background: transparent; color: inherit }
+    30% { transform: scale(1.18); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
+    70% { transform: scale(1.04); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
+    100% { transform: scale(1); background: transparent; color: inherit }
+}
