@@ -1,0 +1,5 @@
+Flask>=2.0,<3.0
+requests>=2.26
+redis>=4.5
+# Optional: install a production WSGI server if deploying (gunicorn/uvicorn/waitress)
+# gunicorn>=20.1.0
