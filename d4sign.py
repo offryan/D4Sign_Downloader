@@ -7,7 +7,7 @@ Improvements made:
 - Log timing for index page generation
 """
 
-from flask import Flask, render_template_string, request, send_file, jsonify
+from flask import Flask, render_template, render_template_string, request, send_file, jsonify
 import requests
 import io
 import zipfile
@@ -47,6 +47,11 @@ if not ICON_UP_SVG or ICON_UP_SVG.strip() == '':
     ICON_UP_SVG = '<i class="fi fi-br-angle-up"></i>'
 if not ICON_DOWN_SVG or ICON_DOWN_SVG.strip() == '':
     ICON_DOWN_SVG = '<i class="fi fi-br-angle-down"></i>'
+# Provide simple SVG fallbacks for sun/moon using currentColor so CSS can recolor them
+if not ICON_SUN_SVG or ICON_SUN_SVG.strip() == '':
+    ICON_SUN_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M6.76 4.84l-1.8-1.79L3.17 4.84l1.79 1.8 1.8-1.8zM1 13h3v-2H1v2zm10 8h2v-3h-2v3zm7.03-1.88l1.8 1.79 1.79-1.8-1.79-1.79-1.8 1.8zM20 11v2h3v-2h-3zM4.22 19.78l1.79-1.79-1.79-1.8-1.79 1.8 1.79 1.79zM11 4V1h2v3h-2zm1 4a5 5 0 100 10 5 5 0 000-10z"/></svg>'
+if not ICON_MOON_SVG or ICON_MOON_SVG.strip() == '':
+    ICON_MOON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M20.742 13.045A8.088 8.088 0 0111 4a8 8 0 108.742 9.045z"/></svg>'
 
 # Config API D4Sign (sandbox dev mode)
 HOST_D4SIGN = "https://sandbox.d4sign.com.br/api/v1"
@@ -68,15 +73,17 @@ except Exception:
     logger.info('Redis not available, continuing with in-memory caches')
 
 # Small HTML template (kept inline)
-TEMPLATE = r"""<!DOCTYPE html>
-<html lang="pt-BR">
+TEMPLATE = r"""<html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <title>Documentos Assinados</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="stylesheet" type="text/css" href="style/style.css">
     <style>
         :root{
             --card-bg:#fff;
+            /* approximate single row height used for scroll container sizing; tweak if needed */
+            --row-height:56px;
             --page-bg:#f6f7f9;
             --muted:#6b7280;
             --accent:#111827;
@@ -151,6 +158,17 @@ TEMPLATE = r"""<!DOCTYPE html>
     #sort-arrow, #sort-arrow-data{display:inline-flex;align-items:center;margin-left:8px;color:var(--muted)}
     .sort-icon{width:10px;height:10px;display:inline-block;vertical-align:middle;line-height:10px}
     .sort-icon svg{width:10px;height:10px;display:block}
+    /* Ensure inline SVG icons inherit color so toggles are visible in both modes */
+    .sort-icon svg, #dark-mode-toggle svg{fill:currentColor;stroke:currentColor}
+    /* Scrollbar styling to avoid white track in dark mode and ensure transparent background behind scroll areas */
+    .table-container{background:transparent}
+    .table-container::-webkit-scrollbar{width:10px}
+    .table-container::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.18);border-radius:8px}
+    .table-container::-webkit-scrollbar-track{background:transparent}
+    .dark-mode .table-container::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12)}
+    .dark-mode .table-container::-webkit-scrollbar-track{background:transparent}
+    .table-container{scrollbar-width:auto;scrollbar-color:rgba(0,0,0,0.18) transparent}
+    .dark-mode .table-container{scrollbar-color:rgba(255,255,255,0.12) transparent}
     /* fallback <i> sizing */
     .sort-icon i{font-style:normal;font-size:10px;line-height:10px;display:inline-block}
     /* In dark mode make sort arrow icons fully visible (use --accent which is white) */
@@ -194,6 +212,12 @@ TEMPLATE = r"""<!DOCTYPE html>
             tbody tr{margin:8px 0;padding:10px;border-radius:10px;background:#fff;box-shadow:0 1px 0 rgba(16,24,40,0.03)}
             tbody td{display:flex;justify-content:space-between;padding:12px}
             tbody td::before{content:attr(data-label);color:var(--muted);font-size:12px;margin-right:8px}
+        }
+        /* Scroll container that activates when many documents are shown. */
+        .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding-right:6px}
+        /* Keep the table header visible while scrolling on larger screens */
+        @media (min-width:721px){
+            .table-container.scroll-enabled thead th{position:sticky;top:0;background:var(--card-bg);z-index:3}
         }
 
     /* Estilo do modal */
@@ -257,7 +281,6 @@ TEMPLATE = r"""<!DOCTYPE html>
     70% { transform: scale(1.04); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
     100% { transform: scale(1); background: transparent; color: inherit }
 }
-
     </style>
 </head>
 <body>
@@ -297,8 +320,6 @@ TEMPLATE = r"""<!DOCTYPE html>
                     </div>
                 </div>
 
-                
-
                 <!-- ordering is now controlled by clicking the table header -->
                 <input type="hidden" name="ordenar_por" id="ordenar_por" value="{{ ordenar_por or '' }}">
                 <!-- filter for view status: default 'finalizado' or 'baixado' -->
@@ -309,7 +330,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                 <h1>Documentos assinados</h1>
                 <div style="display:flex;gap:12px;align-items:center">
                     <div style="color:var(--muted);font-size:13px"><div>Mostrando {{ documentos|length }} documentos</div></div>
-                    
+
                     <div class="downloaded-counter" id="downloaded-counter" title="Total de arquivos baixados">
                         <span style="font-weight:600">Baixados:</span>
                         <span id="downloaded-count" class="count-val">{{ total_downloaded or 0 }}</span>
@@ -322,22 +343,24 @@ TEMPLATE = r"""<!DOCTYPE html>
             </div>
 
             <form method="POST" id="download-form">
-                <table>
+                <div class="table-container {% if documentos|length >= 10 %}scroll-enabled{% endif %}">
+                    <table>
                     <thead>
                         <tr>
                             <th style="width:70px"><div class="master-wrap"><input type="checkbox" id="master-check" title="Selecionar todos"><span id="selected-count">0</span></div></th>
                             <th>Documento</th>
                             <th style="width:140px" class="sortable {% if ordenar_por in ['data_desc','data_asc'] %}active-sort{% endif %}" id="th-data">Data <span id="sort-arrow-data">{% if ordenar_por=='data_desc' %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% elif ordenar_por=='data_asc' %}<span class="sort-icon">{{ ICON_DOWN|safe }}</span>{% else %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% endif %}</span></th>
-                            
+
                             <th style="width:160px">Cofre</th>
                             <th style="width:120px">
-                                <div class="status-header" style="display:flex;align-items:center;gap:8px">
-                                    <span style="font-weight:600;font-size:13px">Status</span>
-                                    <select id="status-filter" name="status_filter" onchange="setViewStatusAndSubmit(this.value)" style="min-width:120px;padding:6px;border-radius:6px;border:1px solid var(--border)">
-                                        <option value="finalizado" {% if request.form.get('view_status','finalizado') != 'baixado' %}selected{% endif %}>Finalizado</option>
-                                        <option value="baixado" {% if request.form.get('view_status') == 'baixado' %}selected{% endif %}>Arquivos baixados</option>
-                                    </select>
-                                </div>
+                                                <div class="status-header" style="display:flex;align-items:center;gap:8px">
+                                                    <span style="font-weight:600;font-size:13px">Status</span>
+                                                    <select id="status-filter" name="status_filter" onchange="setViewStatusAndSubmit(this.value)" style="min-width:140px;padding:6px;border-radius:6px;border:1px solid var(--border)">
+                                                        <option value="finalizado" {% if view_status == 'finalizado' %}selected{% endif %}>Finalizado</option>
+                                                        <option value="baixado" {% if view_status == 'baixado' %}selected{% endif %}>Arquivos baixados</option>
+                                                        <option value="nao_baixado" {% if view_status == 'nao_baixado' %}selected{% endif %}>Não baixados</option>
+                                                    </select>
+                                                </div>
                             </th>
                         </tr>
                     </thead>
@@ -350,7 +373,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                             </td>
                             <td class="doc-name">{{ doc['nomeLimpo'] }}</td>
                             <td class="date-col" data-label="Data">{{ doc['dataAssinatura'] }}</td>
-                            
+
                             <td>{{ doc['cofre_nome'] }}</td>
                             <td>
                                 {{ doc['statusName'] }}
@@ -361,7 +384,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                         </tr>
                         {% endfor %}
                     </tbody>
-                </table>
+                    </table>
+                </div>
 
             <div class="download-area">
                 <div style="color:var(--muted);font-size:13px">Selecione documentos para baixar</div>
@@ -392,8 +416,11 @@ TEMPLATE = r"""<!DOCTYPE html>
         </div>
     </div>
 
+
+
+
     <script>
-        (function(){
+                (function(){
             var master = document.getElementById('master-check');
             function setAll(checked){
                 var inputs = document.querySelectorAll('input[name="documentos"]');
@@ -849,10 +876,9 @@ TEMPLATE = r"""<!DOCTYPE html>
                             });
                     });
                 }
-                
             })();
 })();
-</script>
+    </script>
 </body>
 </html>"""
 
@@ -1538,8 +1564,8 @@ def index():
     cofre_selecionado = request.form.get("cofre")
     documentos = listar_documentos(cofre_selecionado)
 
-    # view_status filter requested by UI: default 'finalizado' (show all Finalizado docs)
-    view_status = request.form.get('view_status') or request.args.get('view_status') or 'finalizado'
+    # view_status filter requested by UI: default 'nao_baixado' (show non-downloaded documents)
+    view_status = request.form.get('view_status') or request.args.get('view_status') or 'nao_baixado'
 
     # mark cofre and whether documento was previously downloaded within the last 60 days
     downloaded_meta = get_downloaded_meta() or {}
@@ -1582,7 +1608,9 @@ def index():
     # Default date range: if user didn't apply a filter, set to earliest and latest
     # 'dataAssinatura_dt' among the currently listed documents when available.
     date_filter_applied = any([data_periodo, data_inicio, data_fim])
-    if not date_filter_applied:
+    # Only auto-fill a default start date on initial GET load. If the user POSTs a filter
+    # we must not override their submitted values with the oldest-document default.
+    if not date_filter_applied and request.method == 'GET':
         try:
             dates = [d.get('dataAssinatura_dt') for d in documentos if isinstance(d.get('dataAssinatura_dt'), datetime)]
             if dates:
@@ -1659,6 +1687,8 @@ def index():
     # Apply view filter
     if view_status == 'baixado':
         documentos = [d for d in documentos if d.get('baixado')]
+    elif view_status == 'nao_baixado':
+        documentos = [d for d in documentos if not d.get('baixado')]
 
     # Limit rendering size
     MAX_RENDER = 2000
@@ -1729,13 +1759,18 @@ def index():
     # pre-wrap icons for safe JS injection
     ICON_UP_WRAPPED = '<span class="sort-icon">' + ICON_UP_SVG + '</span>'
     ICON_DOWN_WRAPPED = '<span class="sort-icon">' + ICON_DOWN_SVG + '</span>'
-    return render_template_string(TEMPLATE, documentos=documentos, cofres=cofres, cofre_selecionado=cofre_selecionado,
+    # Render the `index.html` template (found in project root because
+    # we configured `template_folder='.'` when creating the Flask app).
+    enable_scroll = (len(documentos) >= 10)
+    return render_template_string(TEMPLATE, documentos=documentos, cofres=cofres,
+                                  cofre_selecionado=cofre_selecionado,
                                   busca_nome=request.form.get("busca_nome", ""), data_inicio=data_inicio,
                                   data_fim=data_fim, ordenar_por=ordenar_por,
                                   ICON_UP=ICON_UP_SVG, ICON_DOWN=ICON_DOWN_SVG,
                                   ICON_SUN=ICON_SUN_SVG, ICON_MOON=ICON_MOON_SVG,
                                   ICON_UP_JS=json.dumps(ICON_UP_SVG), ICON_DOWN_JS=json.dumps(ICON_DOWN_SVG),
                                   ICON_UP_WRAPPED_JS=json.dumps(ICON_UP_WRAPPED), ICON_DOWN_WRAPPED_JS=json.dumps(ICON_DOWN_WRAPPED),
+                                  enable_scroll=enable_scroll,
                                   total_downloaded=len(get_downloaded_uuids()),
                                   auto_refresh_last=auto_refresh_last, auto_refresh_next=auto_refresh_next)
 
