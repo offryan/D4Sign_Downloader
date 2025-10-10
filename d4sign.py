@@ -53,10 +53,11 @@ if not ICON_SUN_SVG or ICON_SUN_SVG.strip() == '':
 if not ICON_MOON_SVG or ICON_MOON_SVG.strip() == '':
     ICON_MOON_SVG = '<svg viewBox="0 0 24 24" width="18" height="18" xmlns="http://www.w3.org/2000/svg" fill="currentColor" aria-hidden="true"><path d="M20.742 13.045A8.088 8.088 0 0111 4a8 8 0 108.742 9.045z"/></svg>'
 
-# Config API D4Sign (sandbox dev mode)
-HOST_D4SIGN = "https://sandbox.d4sign.com.br/api/v1"
-TOKEN_API = "live_0824b01d13a9c6885840804b24ef51ca8c5ac408e6a4409a70b116a5add8754e"
-CRYPT_KEY = "live_crypt_a83yrcHUlM4V8j7F3LrF0Zx7bHO1LmFo"
+# Config API D4Sign (use environment variables in deploy)
+# Provide sensible defaults for local development; override in production via env.
+HOST_D4SIGN = os.environ.get('HOST_D4SIGN', 'https://sandbox.d4sign.com.br/api/v1')
+TOKEN_API = os.environ.get('TOKEN_API', '')
+CRYPT_KEY = os.environ.get('CRYPT_KEY', '')
 
 # Optional Redis for persisting signature timestamps and background queue
 REDIS_URL = os.environ.get('REDIS_URL') or os.environ.get('REDIS_URI') or ''
@@ -1776,4 +1777,8 @@ def index():
 
 
 if __name__ == "__main__":
-    app.run(debug=True)
+    # Respect environment variables for deployment platforms
+    port = int(os.environ.get('PORT', '5000'))
+    host = os.environ.get('HOST', '0.0.0.0')
+    debug = os.environ.get('FLASK_DEBUG', '0') in ('1', 'true', 'True')
+    app.run(host=host, port=port, debug=debug)
