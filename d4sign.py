@@ -639,10 +639,11 @@ TEMPLATE = r"""<html lang="pt-BR">
                         if(hiddenStart) hiddenStart.value = start.value;
                         if(hiddenEnd) hiddenEnd.value = end.value;
                     } else {
-                        // when only start present, show formatted start; if none, clear
-                        if(start.value){ input.value = fmt(start.value); if(hiddenStart) hiddenStart.value = start.value; }
-                        else { input.value = ''; if(hiddenStart) hiddenStart.value = ''; }
-                        if(hiddenEnd) hiddenEnd.value = '';
+                        // Require both dates to be filled
+                        if(!start.value || !end.value){
+                            if(errorEl){ errorEl.textContent = 'Ambas as datas são obrigatórias.'; errorEl.style.display = 'block'; }
+                            return;
+                        }
                         if(errorEl){ errorEl.style.display = 'none'; }
                     }
                     popup.style.display = 'none';
@@ -712,10 +713,50 @@ TEMPLATE = r"""<html lang="pt-BR">
                 }
             })();
 
-            // initialize downloaded counter from server-rendered value
+            // initialize downloaded counter and apply localStorage badges
             try{
                 var downloadedCountEl = document.getElementById('downloaded-count');
                 var downloadedCount = downloadedCountEl ? parseInt(downloadedCountEl.textContent, 10) || 0 : 0;
+
+                // Load downloaded docs from localStorage and apply badges
+                try{
+                    var downloadedDocs = JSON.parse(localStorage.getItem('d4sign:downloaded_docs') || '{}');
+                    var sixtyDaysAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
+                    var recentCount = 0;
+
+                    // Clean up old entries and count recent downloads
+                    Object.keys(downloadedDocs).forEach(function(docId){
+                        if(downloadedDocs[docId].timestamp < sixtyDaysAgo){
+                            delete downloadedDocs[docId];
+                        } else {
+                            recentCount++;
+                            // Find row with this document ID and add badge if not present
+                            var checkbox = document.querySelector('input[name="documentos"][value="' + docId + '"]');
+                            if(checkbox){
+                                var row = checkbox.closest('tr');
+                                if(row){
+                                    var statusCell = row.querySelector('td:last-child');
+                                    if(statusCell && !statusCell.querySelector('.baixado-badge')){
+                                        var badge = document.createElement('span');
+                                        badge.className = 'baixado-badge';
+                                        badge.textContent = 'Baixado';
+                                        statusCell.appendChild(document.createTextNode(' '));
+                                        statusCell.appendChild(badge);
+                                    }
+                                }
+                            }
+                        }
+                    });
+
+                    // Save cleaned up data back
+                    localStorage.setItem('d4sign:downloaded_docs', JSON.stringify(downloadedDocs));
+
+                    // Update counter with localStorage data
+                    if(downloadedCountEl){
+                        downloadedCountEl.textContent = recentCount;
+                        downloadedCount = recentCount;
+                    }
+                }catch(e){ console.error('Error loading from localStorage:', e); }
             }catch(e){ var downloadedCount = 0; }
 
             // ensure status-filter selection updates the hidden view_status before submitting
@@ -841,6 +882,21 @@ TEMPLATE = r"""<html lang="pt-BR">
                                             }catch(e){}
                                             // update modal to completed and enable close
                                             showSuccess('Download Concluído');
+                                        // Save downloaded document IDs to localStorage for persistence
+                                        try{
+                                            var selectedIds = fd.getAll('documentos');
+                                            var downloadedDocs = JSON.parse(localStorage.getItem('d4sign:downloaded_docs') || '{}');
+                                            var now = new Date().toISOString();
+                                            selectedIds.forEach(function(id){
+                                                downloadedDocs[id] = {downloaded_at: now, timestamp: Date.now()};
+                                            });
+                                            // Clean up entries older than 60 days
+                                            var sixtyDaysAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
+                                            Object.keys(downloadedDocs).forEach(function(k){
+                                                if(downloadedDocs[k].timestamp < sixtyDaysAgo) delete downloadedDocs[k];
+                                            });
+                                            localStorage.setItem('d4sign:downloaded_docs', JSON.stringify(downloadedDocs));
+                                        }catch(e){ console.error('Error saving to localStorage:', e); }
                                         // increment downloaded counter visually with micro-flash
                                         try{
                                             downloadedCount = (downloadedCount || 0) + 1;
@@ -861,8 +917,8 @@ TEMPLATE = r"""<html lang="pt-BR">
                                                 }
                                             }catch(e){}
                                         }catch(e){}
-                                        // auto-hide after short delay (5s)
-                                        setTimeout(function(){ hideModal(); }, 5000);
+                                        // Reload page after short delay to show updated badges
+                                        setTimeout(function(){ window.location.reload(); }, 2000);
                                     });
                                 }
                                 // non-zip response: load as text (likely the HTML page with errors or no-selection)
@@ -1606,31 +1662,20 @@ def index():
     data_fim = request.form.get("data_fim")
     # ultima_* filters removed
 
-    # Default date range: if user didn't apply a filter, set to earliest and latest
-    # 'dataAssinatura_dt' among the currently listed documents when available.
+    # Default date range: 60 days ago to today
     date_filter_applied = any([data_periodo, data_inicio, data_fim])
-    # Only auto-fill a default start date on initial GET load. If the user POSTs a filter
-    # we must not override their submitted values with the oldest-document default.
+    # Only auto-fill defaults on initial GET load without filters
     if not date_filter_applied and request.method == 'GET':
         try:
-            dates = [d.get('dataAssinatura_dt') for d in documentos if isinstance(d.get('dataAssinatura_dt'), datetime)]
-            if dates:
-                # fill only the start of the period with the oldest document's date
-                min_dt = min(dates)
-                data_inicio = min_dt.strftime('%Y-%m-%d')
-                # leave data_fim empty so user can pick an end date explicitly
-                data_fim = ''
-            else:
-                # fallback to last 30 days if no parsed dates are available
-                ontem = datetime.now() - timedelta(days=1)
-                inicio_periodo = ontem - timedelta(days=29)
-                data_inicio = inicio_periodo.strftime('%Y-%m-%d')
-                data_fim = ontem.strftime('%Y-%m-%d')
-        except Exception:
-            ontem = datetime.now() - timedelta(days=1)
-            inicio_periodo = ontem - timedelta(days=29)
+            hoje = datetime.now()
+            inicio_periodo = hoje - timedelta(days=60)
             data_inicio = inicio_periodo.strftime('%Y-%m-%d')
-            data_fim = ontem.strftime('%Y-%m-%d')
+            data_fim = hoje.strftime('%Y-%m-%d')
+        except Exception:
+            hoje = datetime.now()
+            inicio_periodo = hoje - timedelta(days=60)
+            data_inicio = inicio_periodo.strftime('%Y-%m-%d')
+            data_fim = hoje.strftime('%Y-%m-%d')
 
     # Filtro por campo "data" (dataAssinatura_dt)
     if data_periodo:
@@ -1710,9 +1755,15 @@ def index():
                         continue
                     nome_original = request.form.get(f"doc_nomes[{uuid_doc}]") or f"{uuid_doc}.pdf"
                     safe_name = re.sub(r'[<>:"/\\|?*]', "_", nome_original).strip()
-                    if not os.path.splitext(safe_name)[1]:
-                        safe_name += ".pdf"
-                    base, ext = os.path.splitext(safe_name)
+                    # Fix: Find the LAST occurrence of '.' for extension to avoid treating periods in filename as separators
+                    if '.' in safe_name:
+                        last_dot_idx = safe_name.rfind('.')
+                        base = safe_name[:last_dot_idx]
+                        ext = safe_name[last_dot_idx:]
+                    else:
+                        base = safe_name
+                        ext = '.pdf'
+                        safe_name += '.pdf'
                     candidate = safe_name
                     if candidate in used:
                         n = counts.get(base, 1)
