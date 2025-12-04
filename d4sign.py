@@ -21,8 +21,15 @@ from functools import wraps
 import json
 import threading
 import traceback
+from dotenv import load_dotenv
 
 app = Flask(__name__)
+
+# Load .env for local development (keeps secrets out of code)
+try:
+    load_dotenv()
+except Exception:
+    pass
 
 # Logger (define early so modules that run at import can log)
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -92,7 +99,10 @@ TEMPLATE = r"""<html lang="pt-BR">
             --text-color:#111111;
             --btn-bg:#111111;
             --btn-text:#ffffff;
-            --badge-bg:#111111;
+            /* Badge background for selected-count in light theme: light surface so text can be dark */
+            --badge-bg:#f3f4f6;
+            --selected-count-text: #111111; /* default for light theme: dark text on badge */
+            --selected-count-text: #111111; /* default for light theme: dark text on badge */
             --spinner-border: rgba(0,0,0,0.12);
             --spinner-top: rgba(0,0,0,0.7);
             --success-bg: #10b981;
@@ -115,7 +125,8 @@ TEMPLATE = r"""<html lang="pt-BR">
             --text-color:#ffffff;
             --btn-bg:#ffffff;
             --btn-text:#111111;
-            --badge-bg:#ffffff;
+            /* Dark mode: use dark badge background so text (white) is readable */
+            --badge-bg:#111111;
             --spinner-border: rgba(255,255,255,0.12);
             --spinner-top: rgba(255,255,255,0.9);
             --success-bg: #059669;
@@ -126,18 +137,33 @@ TEMPLATE = r"""<html lang="pt-BR">
                 --counter-flash-text: #05203a;
                 --modal-bg: #071018;
                 --modal-text: var(--text-color);
-            --row-hover-bg: rgba(255,255,255,0.03);
+                --row-hover-bg: rgba(255,255,255,0.03);
+                --selected-count-text: #ffffff; /* in dark mode, selected counter text should be white */
         }
+    /* Forçar cor dos títulos da tabela no modo escuro para garantir legibilidade */
+    .dark-mode thead th,
+    .dark-mode thead th * {
+        color: var(--text-color) !important;
+    }
+    .dark-mode table thead th a {
+        color: var(--text-color) !important;
+    }
     html,body{height:100%;margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
         .page{max-width:1100px;margin:28px auto;padding:18px}
     .card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 6px 18px rgba(15,23,42,0.06);transition:background-color .25s ease,box-shadow .25s ease}
         .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
         .controls .group{display:flex;flex-direction:column;gap:6px}
         label{font-size:13px;color:var(--muted)}
-        select,input[type=text],input[type=date]{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:#fff}
+        /* Form controls: use card background and text color variables so contrast matches theme */
+        select,input[type=text],input[type=date]{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text-color)}
+        /* Ensure dropdown options inherit the correct colors (browser support varies) */
+        select option{background:var(--card-bg);color:var(--text-color)}
     .title-row{display:flex;justify-content:space-between;align-items:center;margin:12px 0 18px}
         h1{margin:0;font-size:28px;letter-spacing:-0.02em}
         table{width:100%;border-collapse:collapse;margin-top:6px}
+        /* Ensure table header text follows the theme color in both light and dark modes */
+        thead th, thead th * { color: var(--text-color) !important; }
+        thead th a { color: inherit !important; }
         thead th{font-weight:600;padding:12px 10px;border-bottom:1px solid var(--border);background:transparent;text-align:left}
     tbody td{padding:14px 10px;border-bottom:1px solid var(--border);color:var(--text-color)}
     tbody tr:hover td{background:var(--row-hover-bg)}
@@ -152,15 +178,23 @@ TEMPLATE = r"""<html lang="pt-BR">
     /* master checkbox / badge */
         .master-wrap{display:flex;align-items:center;gap:10px}
         #master-check{width:18px;height:18px;cursor:pointer;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
-    #selected-count{font-size:12px;color:var(--btn-text);background:var(--badge-bg);padding:6px 8px;border-radius:999px}
+    #selected-count{font-size:12px;color:var(--selected-count-text);background:var(--badge-bg);padding:6px 8px;border-radius:999px}
     th.sortable{cursor:pointer;user-select:none}
     th.sortable.active-sort{color:var(--accent);font-weight:700}
-    /* icons sizing */
+    /* icons sizing: ensure icons occupy visible area and inherit color from theme */
     #sort-arrow, #sort-arrow-data{display:inline-flex;align-items:center;margin-left:8px;color:var(--muted)}
-    .sort-icon{width:10px;height:10px;display:inline-block;vertical-align:middle;line-height:10px}
-    .sort-icon svg{width:10px;height:10px;display:block}
+    .sort-icon{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;line-height:1;color:var(--muted)}
+    .sort-icon svg{width:100%;height:100%;display:block}
     /* Ensure inline SVG icons inherit color so toggles are visible in both modes */
+    .sort-icon, .sort-icon svg { color: inherit; }
     .sort-icon svg, #dark-mode-toggle svg{fill:currentColor;stroke:currentColor}
+    /* Force any nested SVG elements to adopt currentColor so icons are visible
+       even when SVGs include explicit path fills in source files. */
+    .sort-icon svg, .sort-icon svg *,
+    #sort-arrow svg, #sort-arrow svg *, #sort-arrow-data svg, #sort-arrow-data svg * {
+        fill: currentColor !important;
+        stroke: currentColor !important;
+    }
     /* Scrollbar styling to avoid white track in dark mode and ensure transparent background behind scroll areas */
     .table-container{background:transparent}
     .table-container::-webkit-scrollbar{width:10px}
@@ -423,25 +457,59 @@ TEMPLATE = r"""<html lang="pt-BR">
     <script>
                 (function(){
             var master = document.getElementById('master-check');
+            // Limit used when selecting all from the visible list
+            var MASTER_SELECT_LIMIT = 50;
+
+            // Select only the first N visible documents when master checkbox is used.
             function setAll(checked){
                 var inputs = document.querySelectorAll('input[name="documentos"]');
-                for(var i=0;i<inputs.length;i++) inputs[i].checked = checked;
+                if(checked){
+                    var sel = 0;
+                    for(var i=0;i<inputs.length;i++){
+                        if(sel < MASTER_SELECT_LIMIT){ inputs[i].checked = true; sel++; }
+                        else { inputs[i].checked = false; }
+                    }
+                } else {
+                    for(var i=0;i<inputs.length;i++) inputs[i].checked = false;
+                }
             }
+
             function updateCounter(){
                 var inputs = document.querySelectorAll('input[name="documentos"]');
                 var checked = Array.prototype.slice.call(inputs).filter(function(i){return i.checked;}).length;
                 var countEl = document.getElementById('selected-count');
                 if(countEl) countEl.textContent = checked;
+                // Also update master checkbox visual state based on the first N visible inputs
+                updateMasterState();
                 return {checked: checked, total: inputs.length};
             }
-            if(master){
-                master.addEventListener('change', function(){ setAll(master.checked); updateCounter(); master.indeterminate = false; });
-            }
-            document.addEventListener('change', function(e){
-                if(!e.target || e.target.name !== 'documentos') return;
+
+            function updateMasterState(){
+                if(!master) return;
                 var inputs = document.querySelectorAll('input[name="documentos"]');
                 var all = true, any = false;
-                for(var i=0;i<inputs.length;i++){
+                var considered = 0;
+                for(var i=0;i<inputs.length && considered < MASTER_SELECT_LIMIT;i++){
+                    considered++;
+                    if(inputs[i].checked) any = true; else all = false;
+                }
+                if(considered === 0){ master.checked = false; master.indeterminate = false; return; }
+                master.checked = all;
+                master.indeterminate = (!all && any);
+            }
+
+            if(master){
+                master.addEventListener('change', function(){ setAll(master.checked); updateCounter(); });
+            }
+
+            document.addEventListener('change', function(e){
+                if(!e.target || e.target.name !== 'documentos') return;
+                // Recompute master state only considering the first N visible inputs
+                var inputs = document.querySelectorAll('input[name="documentos"]');
+                var all = true, any = false;
+                var considered = 0;
+                for(var i=0;i<inputs.length && considered < MASTER_SELECT_LIMIT;i++){
+                    considered++;
                     if(inputs[i].checked) any = true; else all = false;
                 }
                 if(master){ master.checked = all; master.indeterminate = (!all && any); }
@@ -639,11 +707,10 @@ TEMPLATE = r"""<html lang="pt-BR">
                         if(hiddenStart) hiddenStart.value = start.value;
                         if(hiddenEnd) hiddenEnd.value = end.value;
                     } else {
-                        // Require both dates to be filled
-                        if(!start.value || !end.value){
-                            if(errorEl){ errorEl.textContent = 'Ambas as datas são obrigatórias.'; errorEl.style.display = 'block'; }
-                            return;
-                        }
+                        // when only start present, show formatted start; if none, clear
+                        if(start.value){ input.value = fmt(start.value); if(hiddenStart) hiddenStart.value = start.value; }
+                        else { input.value = ''; if(hiddenStart) hiddenStart.value = ''; }
+                        if(hiddenEnd) hiddenEnd.value = '';
                         if(errorEl){ errorEl.style.display = 'none'; }
                     }
                     popup.style.display = 'none';
@@ -713,50 +780,10 @@ TEMPLATE = r"""<html lang="pt-BR">
                 }
             })();
 
-            // initialize downloaded counter and apply localStorage badges
+            // initialize downloaded counter from server-rendered value
             try{
                 var downloadedCountEl = document.getElementById('downloaded-count');
                 var downloadedCount = downloadedCountEl ? parseInt(downloadedCountEl.textContent, 10) || 0 : 0;
-
-                // Load downloaded docs from localStorage and apply badges
-                try{
-                    var downloadedDocs = JSON.parse(localStorage.getItem('d4sign:downloaded_docs') || '{}');
-                    var sixtyDaysAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
-                    var recentCount = 0;
-
-                    // Clean up old entries and count recent downloads
-                    Object.keys(downloadedDocs).forEach(function(docId){
-                        if(downloadedDocs[docId].timestamp < sixtyDaysAgo){
-                            delete downloadedDocs[docId];
-                        } else {
-                            recentCount++;
-                            // Find row with this document ID and add badge if not present
-                            var checkbox = document.querySelector('input[name="documentos"][value="' + docId + '"]');
-                            if(checkbox){
-                                var row = checkbox.closest('tr');
-                                if(row){
-                                    var statusCell = row.querySelector('td:last-child');
-                                    if(statusCell && !statusCell.querySelector('.baixado-badge')){
-                                        var badge = document.createElement('span');
-                                        badge.className = 'baixado-badge';
-                                        badge.textContent = 'Baixado';
-                                        statusCell.appendChild(document.createTextNode(' '));
-                                        statusCell.appendChild(badge);
-                                    }
-                                }
-                            }
-                        }
-                    });
-
-                    // Save cleaned up data back
-                    localStorage.setItem('d4sign:downloaded_docs', JSON.stringify(downloadedDocs));
-
-                    // Update counter with localStorage data
-                    if(downloadedCountEl){
-                        downloadedCountEl.textContent = recentCount;
-                        downloadedCount = recentCount;
-                    }
-                }catch(e){ console.error('Error loading from localStorage:', e); }
             }catch(e){ var downloadedCount = 0; }
 
             // ensure status-filter selection updates the hidden view_status before submitting
@@ -882,21 +909,6 @@ TEMPLATE = r"""<html lang="pt-BR">
                                             }catch(e){}
                                             // update modal to completed and enable close
                                             showSuccess('Download Concluído');
-                                        // Save downloaded document IDs to localStorage for persistence
-                                        try{
-                                            var selectedIds = fd.getAll('documentos');
-                                            var downloadedDocs = JSON.parse(localStorage.getItem('d4sign:downloaded_docs') || '{}');
-                                            var now = new Date().toISOString();
-                                            selectedIds.forEach(function(id){
-                                                downloadedDocs[id] = {downloaded_at: now, timestamp: Date.now()};
-                                            });
-                                            // Clean up entries older than 60 days
-                                            var sixtyDaysAgo = Date.now() - (60 * 24 * 60 * 60 * 1000);
-                                            Object.keys(downloadedDocs).forEach(function(k){
-                                                if(downloadedDocs[k].timestamp < sixtyDaysAgo) delete downloadedDocs[k];
-                                            });
-                                            localStorage.setItem('d4sign:downloaded_docs', JSON.stringify(downloadedDocs));
-                                        }catch(e){ console.error('Error saving to localStorage:', e); }
                                         // increment downloaded counter visually with micro-flash
                                         try{
                                             downloadedCount = (downloadedCount || 0) + 1;
@@ -917,8 +929,8 @@ TEMPLATE = r"""<html lang="pt-BR">
                                                 }
                                             }catch(e){}
                                         }catch(e){}
-                                        // Reload page after short delay to show updated badges
-                                        setTimeout(function(){ window.location.reload(); }, 2000);
+                                        // auto-hide after short delay (5s)
+                                        setTimeout(function(){ hideModal(); }, 5000);
                                     });
                                 }
                                 // non-zip response: load as text (likely the HTML page with errors or no-selection)
@@ -949,6 +961,13 @@ logger = logging.getLogger(__name__)
 CACHE = {}
 CACHE_TTL = 60
 
+# If env vars were just loaded, clear any pre-existing cache to avoid stale empty results
+try:
+    if TOKEN_API:
+        CACHE.clear()
+except Exception:
+    pass
+
 # In-memory signature cache populated by manual refresh or webhooks
 SIGNATURE_CACHE = {}
 
@@ -978,17 +997,21 @@ def record_download(uuid_doc, meta: dict):
     if not uuid_doc:
         return
     try:
+        # Always persist to local file so downloads.json remains the canonical local source.
+        try:
+            d = _load_local_downloads() or {}
+            d[uuid_doc] = meta
+            _save_local_downloads(d)
+        except Exception:
+            logger.exception('Local record_download error')
+
+        # If Redis is available, also persist there for distributed counters/state
         if redis_client:
             try:
                 redis_client.sadd(DOWNLOADS_SET_KEY, uuid_doc)
                 redis_client.hset(DOWNLOADS_META_KEY, uuid_doc, json.dumps(meta, default=str))
-                return
             except Exception:
-                logger.exception('Redis record_download error, falling back to local file')
-        # fallback to local file
-        d = _load_local_downloads()
-        d[uuid_doc] = meta
-        _save_local_downloads(d)
+                logger.exception('Redis record_download error')
     except Exception:
         logger.exception('record_download error')
 
@@ -1662,20 +1685,23 @@ def index():
     data_fim = request.form.get("data_fim")
     # ultima_* filters removed
 
-    # Default date range: 60 days ago to today
+    # Default date range: if user didn't apply a filter, default to last 60 days.
     date_filter_applied = any([data_periodo, data_inicio, data_fim])
-    # Only auto-fill defaults on initial GET load without filters
+    # Only auto-fill defaults on initial GET load. If the user POSTs a filter
+    # we must not override their submitted values.
     if not date_filter_applied and request.method == 'GET':
         try:
-            hoje = datetime.now()
-            inicio_periodo = hoje - timedelta(days=60)
+            # Use UTC-aware current date for consistent behavior across environments
+            today = datetime.utcnow().date()
+            inicio_periodo = today - timedelta(days=60)
             data_inicio = inicio_periodo.strftime('%Y-%m-%d')
-            data_fim = hoje.strftime('%Y-%m-%d')
+            data_fim = today.strftime('%Y-%m-%d')
         except Exception:
-            hoje = datetime.now()
-            inicio_periodo = hoje - timedelta(days=60)
+            # fallback to naive now if anything goes wrong
+            today = datetime.now().date()
+            inicio_periodo = today - timedelta(days=60)
             data_inicio = inicio_periodo.strftime('%Y-%m-%d')
-            data_fim = hoje.strftime('%Y-%m-%d')
+            data_fim = today.strftime('%Y-%m-%d')
 
     # Filtro por campo "data" (dataAssinatura_dt)
     if data_periodo:
@@ -1755,15 +1781,9 @@ def index():
                         continue
                     nome_original = request.form.get(f"doc_nomes[{uuid_doc}]") or f"{uuid_doc}.pdf"
                     safe_name = re.sub(r'[<>:"/\\|?*]', "_", nome_original).strip()
-                    # Fix: Find the LAST occurrence of '.' for extension to avoid treating periods in filename as separators
-                    if '.' in safe_name:
-                        last_dot_idx = safe_name.rfind('.')
-                        base = safe_name[:last_dot_idx]
-                        ext = safe_name[last_dot_idx:]
-                    else:
-                        base = safe_name
-                        ext = '.pdf'
-                        safe_name += '.pdf'
+                    if not os.path.splitext(safe_name)[1]:
+                        safe_name += ".pdf"
+                    base, ext = os.path.splitext(safe_name)
                     candidate = safe_name
                     if candidate in used:
                         n = counts.get(base, 1)
