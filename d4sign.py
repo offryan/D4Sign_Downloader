@@ -81,12 +81,12 @@ except Exception:
     logger.info('Redis not available, continuing with in-memory caches')
 
 # Small HTML template (kept inline)
-TEMPLATE = r"""<html lang="pt-BR">
+TEMPLATE = r"""<!DOCTYPE html>
+<html lang="pt-BR">
 <head>
     <meta charset="utf-8">
     <title>Documentos Assinados</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <link rel="stylesheet" type="text/css" href="style/style.css">
     <style>
         :root{
             --card-bg:#fff;
@@ -148,6 +148,9 @@ TEMPLATE = r"""<html lang="pt-BR">
     .dark-mode table thead th a {
         color: var(--text-color) !important;
     }
+    *,*::before,*::after{box-sizing:border-box}
+    /* o modo escuro fica no <body>; sem isso a margem do topo aparecia clara */
+    html:has(body.dark-mode){background:#071018}
     html,body{height:100%;margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
         .page{max-width:1100px;margin:28px auto;padding:18px}
     .card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 6px 18px rgba(15,23,42,0.06);transition:background-color .25s ease,box-shadow .25s ease}
@@ -233,8 +236,8 @@ TEMPLATE = r"""<html lang="pt-BR">
         /* Download button */
     .download-btn{background:var(--btn-bg);color:var(--btn-text);padding:12px 18px;border-radius:10px;border:none;cursor:pointer;font-weight:600;transition:background-color .2s ease,color .2s ease}
         /* Dark mode toggle button styling */
-        #dark-mode-toggle{border:1px solid var(--border);padding:6px 8px;border-radius:8px;cursor:pointer;background:transparent;color:var(--muted);display:inline-flex;align-items:center;gap:6px;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
-        #dark-mode-toggle .toggle-icon{display:inline-block;line-height:0;transition:opacity .25s ease,transform .25s ease;opacity:0;transform:scale(.9);width:18px;height:18px}
+        #dark-mode-toggle{border:1px solid var(--border);padding:6px 8px;border-radius:8px;cursor:pointer;background:transparent;color:var(--muted);display:inline-grid;place-items:center;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
+        #dark-mode-toggle .toggle-icon{grid-area:1/1;display:inline-block;line-height:0;transition:opacity .25s ease,transform .25s ease;opacity:0;transform:scale(.9);width:18px;height:18px}
         #dark-mode-toggle .toggle-icon svg{width:18px;height:18px;display:block}
         #dark-mode-toggle .toggle-icon.visible{opacity:1;transform:scale(1)}
         .download-area{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
@@ -244,9 +247,15 @@ TEMPLATE = r"""<html lang="pt-BR">
             .title-row{flex-direction:column;align-items:flex-start;gap:10px}
             table thead{display:none}
             table, tbody, tr, td{display:block;width:100%}
-            tbody tr{margin:8px 0;padding:10px;border-radius:10px;background:#fff;box-shadow:0 1px 0 rgba(16,24,40,0.03)}
-            tbody td{display:flex;justify-content:space-between;padding:12px}
-            tbody td::before{content:attr(data-label);color:var(--muted);font-size:12px;margin-right:8px}
+            tbody tr{margin:10px 0;padding:6px 12px;border-radius:10px;background:var(--card-bg);border:1px solid var(--border)}
+            tbody td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;text-align:right;overflow-wrap:anywhere}
+            tbody tr td:last-child{border-bottom:none}
+            tbody td::before{content:attr(data-label);color:var(--muted);font-size:12px;text-align:left;flex-shrink:0}
+            tbody td.doc-name{display:block;text-align:left;font-weight:600}
+            tbody td.doc-name::before{content:none}
+            .download-area{flex-direction:column;align-items:stretch;gap:12px}
+            .download-area .download-btn{width:100%}
+            .table-container.scroll-enabled{padding-right:0}
         }
         /* Scroll container that activates when many documents are shown. */
         .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding-right:6px}
@@ -402,19 +411,19 @@ TEMPLATE = r"""<html lang="pt-BR">
                     <tbody>
                         {% for doc in documentos %}
                         <tr>
-                            <td>
+                            <td data-label="Selecionar">
                                 <input type="checkbox" name="documentos" value="{{ doc['uuidDoc'] }}">
                                 <input type="hidden" name="doc_nomes[{{ doc['uuidDoc'] }}]" value="{{ doc['nomeOriginal'] }}">
                             </td>
                             <td class="doc-name">{{ doc['nomeLimpo'] }}</td>
                             <td class="date-col" data-label="Data">{{ doc['dataAssinatura'] }}</td>
 
-                            <td>{{ doc['cofre_nome'] }}</td>
-                            <td>
-                                {{ doc['statusName'] }}
+                            <td data-label="Cofre">{{ doc['cofre_nome'] }}</td>
+                            <td data-label="Status">
+                                <span>{{ doc['statusName'] }}
                                 {% if doc.get('baixado') %}
                                     <span class="baixado-badge">Baixado</span>
-                                {% endif %}
+                                {% endif %}</span>
                             </td>
                         </tr>
                         {% endfor %}
@@ -873,6 +882,7 @@ TEMPLATE = r"""<html lang="pt-BR">
                                 if(ct.indexOf('application/zip') !== -1 || ct.indexOf('application/octet-stream') !== -1){
                                     // capture zip-count header if present, then handle blob
                                     var zipCountHeader = resp.headers.get('X-Zip-Count');
+                                    var downloadedTotalHeader = resp.headers.get('X-Downloaded-Total');
                                     return resp.blob().then(function(blob){
                                         // try to extract filename from Content-Disposition
                                         var cd = resp.headers.get('Content-Disposition') || '';
@@ -911,7 +921,9 @@ TEMPLATE = r"""<html lang="pt-BR">
                                             showSuccess('Download Concluído');
                                         // increment downloaded counter visually with micro-flash
                                         try{
-                                            downloadedCount = (downloadedCount || 0) + 1;
+                                            // o servidor informa o total real (antes somava 1 por zip, mesmo com vários arquivos)
+                                            var totalServidor = parseInt(downloadedTotalHeader, 10);
+                                            downloadedCount = isNaN(totalServidor) ? (downloadedCount || 0) + (parseInt(zipCountHeader, 10) || 1) : totalServidor;
                                             if(downloadedCountEl) downloadedCountEl.textContent = downloadedCount;
                                             // add flash class to parent .count-val and remove after animation
                                             try{
@@ -1801,6 +1813,8 @@ def index():
             resp = send_file(mem, as_attachment=True, download_name="documentos_assinados.zip", mimetype="application/zip")
             try:
                 resp.headers['X-Zip-Count'] = str(len(used))
+                # total de documentos já baixados (sem repetição), para a página atualizar o contador
+                resp.headers['X-Downloaded-Total'] = str(len(get_downloaded_uuids()))
             except Exception:
                 pass
             return resp
