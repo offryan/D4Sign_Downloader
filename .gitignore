@@ -10,3 +10,6 @@ downloads.json
 instance/
 .DS_Store
 .envrc
+
+# Datas de assinatura das rotas de manutenção (local)
+assinaturas.json

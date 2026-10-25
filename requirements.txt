@@ -2,3 +2,6 @@ Flask>=2.0
 requests>=2.25
 python-dotenv>=0.21
 redis>=4.0
+msal>=1.28
+psycopg[binary]>=3.1
+psycopg-pool>=3.2
