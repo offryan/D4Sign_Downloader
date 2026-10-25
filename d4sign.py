@@ -21,6 +21,9 @@ from functools import wraps
 import json
 import threading
 import traceback
+from concurrent.futures import ThreadPoolExecutor
+from requests.adapters import HTTPAdapter
+from urllib3.util.retry import Retry
 from dotenv import load_dotenv
 
 app = Flask(__name__)
@@ -151,8 +154,12 @@ TEMPLATE = r"""<!DOCTYPE html>
     *,*::before,*::after{box-sizing:border-box}
     /* o modo escuro fica no <body>; sem isso a margem do topo aparecia clara */
     html:has(body.dark-mode){background:#071018}
-    html,body{height:100%;margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
-        .page{max-width:1100px;margin:28px auto;padding:18px}
+    /* min-height em vez de height e espaço do topo como padding: antes a margem do .page
+       "vazava" para fora do body, a página ficava mais alta que a tela e aparecia uma faixa no topo */
+    html{height:100%}
+    html,body{margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
+    body{min-height:100%}
+        .page{max-width:1100px;margin:0 auto;padding:46px 18px}
     .card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 6px 18px rgba(15,23,42,0.06);transition:background-color .25s ease,box-shadow .25s ease}
         .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
         .controls .group{display:flex;flex-direction:column;gap:6px}
@@ -261,6 +268,8 @@ TEMPLATE = r"""<!DOCTYPE html>
         .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding-right:6px}
         /* Keep the table header visible while scrolling on larger screens */
         @media (min-width:721px){
+            /* no desktop a lista se ajusta à altura da janela, para não rolar a página e a lista ao mesmo tempo */
+            .table-container.scroll-enabled{max-height:max(240px, min(calc(var(--row-height) * 9), calc(100vh - 430px)))}
             .table-container.scroll-enabled thead th{position:sticky;top:0;background:var(--card-bg);z-index:3}
         }
 
@@ -883,6 +892,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                                     // capture zip-count header if present, then handle blob
                                     var zipCountHeader = resp.headers.get('X-Zip-Count');
                                     var downloadedTotalHeader = resp.headers.get('X-Downloaded-Total');
+                                    var falhasHeader = parseInt(resp.headers.get('X-Zip-Falhas'), 10) || 0;
                                     return resp.blob().then(function(blob){
                                         // try to extract filename from Content-Disposition
                                         var cd = resp.headers.get('Content-Disposition') || '';
@@ -914,7 +924,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                                                             filesPart = n + (n === 1 ? ' arquivo' : ' arquivos') + ' — ';
                                                         }
                                                     }catch(e){}
-                                                    modalMsgEl.textContent = (filesPart ? filesPart : '') + 'Tamanho total: ' + sizeStr + ' MB';
+                                                    modalMsgEl.textContent = (filesPart ? filesPart : '') + 'Tamanho total: ' + sizeStr + ' MB'
+                                                        + (falhasHeader ? ' — ' + falhasHeader + (falhasHeader === 1 ? ' documento não pôde' : ' documentos não puderam') + ' ser baixado' + (falhasHeader === 1 ? '' : 's') + ', tente de novo' : '');
                                                 }
                                             }catch(e){}
                                             // update modal to completed and enable close
@@ -1026,6 +1037,25 @@ def record_download(uuid_doc, meta: dict):
                 logger.exception('Redis record_download error')
     except Exception:
         logger.exception('record_download error')
+
+def record_downloads(uuids):
+    """Registra vários downloads de uma vez."""
+    uuids = [u for u in uuids if u]
+    if not uuids:
+        return
+    agora = datetime.utcnow().isoformat()
+    try:
+        d = _load_local_downloads() or {}
+        for u in uuids:
+            d[u] = {'uuidDoc': u, 'downloaded_at': agora}
+        _save_local_downloads(d)
+    except Exception:
+        logger.exception('Local record_downloads error')
+    if redis_client:
+        try:
+            redis_client.sadd(DOWNLOADS_SET_KEY, *uuids)
+        except Exception:
+            logger.exception('Redis record_downloads error')
 
 def get_downloaded_uuids():
     try:
@@ -1274,10 +1304,24 @@ def listar_documentos(uuid_safe=None):
         return []
 
 
+# Downloads em paralelo: quantos documentos baixar ao mesmo tempo da D4Sign
+DOWNLOAD_WORKERS = max(1, int(os.environ.get('D4SIGN_DOWNLOAD_WORKERS', '6')))
+
+def _criar_sessao():
+    sessao = requests.Session()
+    retry = Retry(total=3, backoff_factor=0.6, status_forcelist=(429, 500, 502, 503, 504),
+                  allowed_methods=frozenset(['GET', 'POST']), respect_retry_after_header=True)
+    adapter = HTTPAdapter(pool_connections=DOWNLOAD_WORKERS * 2, pool_maxsize=DOWNLOAD_WORKERS * 2, max_retries=retry)
+    sessao.mount('https://', adapter)
+    sessao.mount('http://', adapter)
+    return sessao
+
+HTTP = _criar_sessao()
+
 def baixar_documento(uuid_doc):
     url = f"{HOST_D4SIGN}/documents/{uuid_doc}/download?tokenAPI={TOKEN_API}&cryptKey={CRYPT_KEY}"
     try:
-        r = requests.post(url, json={"type": "pdf", "language": "pt"}, timeout=30)
+        r = HTTP.post(url, json={"type": "pdf", "language": "pt"}, timeout=30)
         if r.status_code != 200:
             return None
         result = r.json()
@@ -1288,7 +1332,7 @@ def baixar_documento(uuid_doc):
                 content_val = parts[1] if len(parts) > 1 else content_val
             return base64.b64decode(content_val + "=" * ((4 - len(content_val) % 4) % 4))
         if "url" in result:
-            resp = requests.get(result["url"], timeout=30)
+            resp = HTTP.get(result["url"], timeout=60)
             if resp.status_code == 200:
                 return resp.content
     except Exception:
@@ -1784,11 +1828,16 @@ def index():
         selecionados = request.form.getlist("documentos")
         if selecionados:
             mem = io.BytesIO()
+            inicio = time.time()
+            # baixa vários documentos ao mesmo tempo (antes era um de cada vez); map mantém a ordem
+            with ThreadPoolExecutor(max_workers=min(DOWNLOAD_WORKERS, len(selecionados))) as pool:
+                conteudos = list(pool.map(baixar_documento, selecionados))
+            falhas = [u for u, c in zip(selecionados, conteudos) if not c]
+            baixados = []
             with zipfile.ZipFile(mem, "w", zipfile.ZIP_STORED) as zf:
                 used = set()
                 counts = {}
-                for uuid_doc in selecionados:
-                    content = baixar_documento(uuid_doc)
+                for uuid_doc, content in zip(selecionados, conteudos):
                     if not content:
                         continue
                     nome_original = request.form.get(f"doc_nomes[{uuid_doc}]") or f"{uuid_doc}.pdf"
@@ -1803,16 +1852,18 @@ def index():
                         counts[base] = n + 1
                     used.add(candidate)
                     zf.writestr(candidate, content)
-                    # try to persist that this uuid was downloaded (server-side)
-                    try:
-                        record_download(uuid_doc, {'uuidDoc': uuid_doc, 'nomeOriginal': nome_original, 'downloaded_at': datetime.utcnow().isoformat()})
-                    except Exception:
-                        logger.exception('Erro ao registrar download')
+                    baixados.append(uuid_doc)
+            try:
+                record_downloads(baixados)
+            except Exception:
+                logger.exception('Erro ao registrar downloads')
+            logger.info(f'Lote: {len(baixados)} baixados, {len(falhas)} falhas em {time.time() - inicio:.1f}s ({DOWNLOAD_WORKERS} em paralelo)')
             mem.seek(0)
             # return a response with a header indicating how many files are inside the zip
             resp = send_file(mem, as_attachment=True, download_name="documentos_assinados.zip", mimetype="application/zip")
             try:
                 resp.headers['X-Zip-Count'] = str(len(used))
+                resp.headers['X-Zip-Falhas'] = str(len(falhas))
                 # total de documentos já baixados (sem repetição), para a página atualizar o contador
                 resp.headers['X-Downloaded-Total'] = str(len(get_downloaded_uuids()))
             except Exception:
