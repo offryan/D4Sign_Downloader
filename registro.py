@@ -1,0 +1,99 @@
+"""Registro de quais documentos cada pessoa já baixou.
+
+Com DATABASE_URL configurada, grava no PostgreSQL (Supabase) e o histórico sobrevive a
+reinícios e novos deploys. Sem ela, usa o arquivo downloads.json (útil só em desenvolvimento:
+no Render o disco é apagado a cada reinício).
+
+Cada registro guarda apenas quem baixou, o identificador do documento na D4Sign e quando.
+"""
+import json
+import logging
+import os
+import threading
+from datetime import datetime, timezone
+
+logger = logging.getLogger(__name__)
+
+DATABASE_URL = os.environ.get('DATABASE_URL', '').strip()
+ARQUIVO_LOCAL = os.path.join(os.path.dirname(__file__), 'downloads.json')
+USUARIO_COMPARTILHADO = {'id': 'compartilhado', 'email': None}
+
+_pool = None
+_trava_arquivo = threading.Lock()
+
+if DATABASE_URL:
+    from psycopg_pool import ConnectionPool
+    # prepare_threshold=None: sem prepared statements, compatível com o pooler do Supabase
+    _pool = ConnectionPool(DATABASE_URL, min_size=0, max_size=4, open=True,
+                           kwargs={'autocommit': True, 'prepare_threshold': None})
+
+
+def usando_banco():
+    return _pool is not None
+
+
+def registrar(usuario, uuids):
+    """Marca os documentos como baixados pela pessoa (ou atualiza a data, se já estavam)."""
+    uuids = sorted({u for u in uuids if u})
+    if not uuids:
+        return
+    usuario = usuario or USUARIO_COMPARTILHADO
+    if _pool:
+        with _pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.executemany(
+                    """INSERT INTO downloads (usuario_id, usuario_email, uuid_doc) VALUES (%s, %s, %s)
+                       ON CONFLICT (usuario_id, uuid_doc)
+                       DO UPDATE SET baixado_em = now(), usuario_email = EXCLUDED.usuario_email""",
+                    [(usuario['id'], usuario.get('email'), u) for u in uuids])
+        return
+    agora = datetime.now(timezone.utc).isoformat()
+    with _trava_arquivo:
+        dados = _ler_arquivo()
+        pessoa = dados.setdefault(usuario['id'], {})
+        for u in uuids:
+            pessoa[u] = agora
+        _salvar_arquivo(dados)
+
+
+def baixados(usuario):
+    """Retorna {uuid_doc: datetime (UTC, sem fuso)} dos documentos que a pessoa já baixou."""
+    usuario = usuario or USUARIO_COMPARTILHADO
+    if _pool:
+        with _pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("SELECT uuid_doc, baixado_em FROM downloads WHERE usuario_id = %s", (usuario['id'],))
+                return {u: dt.astimezone(timezone.utc).replace(tzinfo=None) for u, dt in cur.fetchall()}
+    with _trava_arquivo:
+        pessoa = _ler_arquivo().get(usuario['id'], {})
+    resultado = {}
+    for u, iso in pessoa.items():
+        try:
+            dt = datetime.fromisoformat(iso)
+            resultado[u] = dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+        except (TypeError, ValueError):
+            continue
+    return resultado
+
+
+def _ler_arquivo():
+    try:
+        with open(ARQUIVO_LOCAL, 'r', encoding='utf-8') as f:
+            dados = json.load(f) or {}
+    except FileNotFoundError:
+        return {}
+    except Exception:
+        logger.exception('Erro lendo downloads.json')
+        return {}
+    # Formato antigo: {uuid: {downloaded_at: ...}} sem separar por pessoa
+    if dados and all(isinstance(v, dict) and ('uuidDoc' in v or 'downloaded_at' in v) for v in dados.values()):
+        return {USUARIO_COMPARTILHADO['id']: {u: v.get('downloaded_at') for u, v in dados.items() if v.get('downloaded_at')}}
+    return dados
+
+
+def _salvar_arquivo(dados):
+    try:
+        with open(ARQUIVO_LOCAL, 'w', encoding='utf-8') as f:
+            json.dump(dados, f, ensure_ascii=False, indent=2)
+    except Exception:
+        logger.exception('Erro salvando downloads.json')

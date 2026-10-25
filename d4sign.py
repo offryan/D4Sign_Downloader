@@ -38,6 +38,14 @@ except Exception:
 logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 logger = logging.getLogger(__name__)
 
+from werkzeug.middleware.proxy_fix import ProxyFix
+import auth
+import registro
+
+# O Render termina o HTTPS no proxy: sem isso as URLs de retorno do login sairiam com http://
+app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
+auth.configurar(app)
+
 # Load inline SVG icons from the icons folder so we can embed them without external deps
 def _load_svg(name):
     try:
@@ -252,6 +260,8 @@ TEMPLATE = r"""<!DOCTYPE html>
         @media (max-width:720px){
             .controls{flex-direction:column;align-items:stretch}
             .title-row{flex-direction:column;align-items:flex-start;gap:10px}
+            .title-row > div{flex-wrap:wrap;row-gap:8px}
+            .title-row > div > div:first-child{white-space:nowrap}
             table thead{display:none}
             table, tbody, tr, td{display:block;width:100%}
             tbody tr{margin:10px 0;padding:6px 12px;border-radius:10px;background:var(--card-bg);border:1px solid var(--border)}
@@ -324,6 +334,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 /* Small counter shown near the header */
 .downloaded-counter{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.usuario-logado{font-size:13px;color:var(--muted);white-space:nowrap}
+.usuario-logado a{color:var(--text-color)}
 
 /* micro-flash animation for counter */
 .downloaded-counter .count-val{display:inline-block;padding:3px 6px;border-radius:6px;transition:transform .18s ease}
@@ -388,6 +400,9 @@ TEMPLATE = r"""<!DOCTYPE html>
                         <span style="font-weight:600">Baixados:</span>
                         <span id="downloaded-count" class="count-val">{{ total_downloaded or 0 }}</span>
                     </div>
+                    {% if usuario %}
+                    <div class="usuario-logado" title="{{ usuario.email }}">{{ usuario.nome }} · <a href="/logout">Sair</a></div>
+                    {% endif %}
                     <button id="dark-mode-toggle" title="Alternar modo noturno" aria-label="Alternar modo noturno">
                         <span class="toggle-icon toggle-sun" aria-hidden="true"></span>
                         <span class="toggle-icon toggle-moon" aria-hidden="true"></span>
@@ -472,6 +487,18 @@ TEMPLATE = r"""<!DOCTYPE html>
 
 
 
+    <script>
+        // Se a sessão expirar, qualquer chamada ao servidor recebe 401: leva a pessoa de volta ao login
+        (function(){
+            var fetchOriginal = window.fetch;
+            window.fetch = function(){
+                return fetchOriginal.apply(this, arguments).then(function(resp){
+                    if(resp.status === 401){ window.location.href = '/login?next=' + encodeURIComponent(window.location.pathname); }
+                    return resp;
+                });
+            };
+        })();
+    </script>
     <script>
                 (function(){
             var master = document.getElementById('master-check');
@@ -994,95 +1021,46 @@ except Exception:
 # In-memory signature cache populated by manual refresh or webhooks
 SIGNATURE_CACHE = {}
 
-# Downloads tracking: prefer Redis set + hash, fallback to local JSON file
-DOWNLOADS_SET_KEY = 'd4sign:downloads:set'
-DOWNLOADS_META_KEY = 'd4sign:downloads:meta'
-LOCAL_DOWNLOADS_FILE = os.path.join(os.path.dirname(__file__), 'downloads.json')
+# Quem baixou o quê fica em registro.py (Supabase por pessoa, ou arquivo local em desenvolvimento).
+# As datas de assinatura das rotas antigas de manutenção ficam em outro arquivo, para não se
+# misturarem com os baixados (antes inflavam o contador).
+ASSINATURAS_FILE = os.path.join(os.path.dirname(__file__), 'assinaturas.json')
 
-def _load_local_downloads():
+
+def _load_assinaturas():
     try:
-        if os.path.exists(LOCAL_DOWNLOADS_FILE):
-            with open(LOCAL_DOWNLOADS_FILE, 'r', encoding='utf-8') as f:
+        if os.path.exists(ASSINATURAS_FILE):
+            with open(ASSINATURAS_FILE, 'r', encoding='utf-8') as f:
                 return json.load(f)
     except Exception:
-        logger.exception('Erro lendo arquivo de downloads local')
+        logger.exception('Erro lendo assinaturas.json')
     return {}
 
-def _save_local_downloads(data):
+
+def _save_assinaturas(data):
     try:
-        with open(LOCAL_DOWNLOADS_FILE, 'w', encoding='utf-8') as f:
+        with open(ASSINATURAS_FILE, 'w', encoding='utf-8') as f:
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
-        logger.exception('Erro salvando arquivo de downloads local')
+        logger.exception('Erro salvando assinaturas.json')
 
-def record_download(uuid_doc, meta: dict):
-    """Record a download event. meta is a serializable dict with at least 'uuidDoc'"""
-    if not uuid_doc:
-        return
-    try:
-        # Always persist to local file so downloads.json remains the canonical local source.
-        try:
-            d = _load_local_downloads() or {}
-            d[uuid_doc] = meta
-            _save_local_downloads(d)
-        except Exception:
-            logger.exception('Local record_download error')
-
-        # If Redis is available, also persist there for distributed counters/state
-        if redis_client:
-            try:
-                redis_client.sadd(DOWNLOADS_SET_KEY, uuid_doc)
-                redis_client.hset(DOWNLOADS_META_KEY, uuid_doc, json.dumps(meta, default=str))
-            except Exception:
-                logger.exception('Redis record_download error')
-    except Exception:
-        logger.exception('record_download error')
 
 def record_downloads(uuids):
-    """Registra vários downloads de uma vez."""
-    uuids = [u for u in uuids if u]
-    if not uuids:
-        return
-    agora = datetime.utcnow().isoformat()
-    try:
-        d = _load_local_downloads() or {}
-        for u in uuids:
-            d[u] = {'uuidDoc': u, 'downloaded_at': agora}
-        _save_local_downloads(d)
-    except Exception:
-        logger.exception('Local record_downloads error')
-    if redis_client:
-        try:
-            redis_client.sadd(DOWNLOADS_SET_KEY, *uuids)
-        except Exception:
-            logger.exception('Redis record_downloads error')
+    """Registra os documentos como baixados pela pessoa logada."""
+    registro.registrar(auth.usuario_atual(), uuids)
 
-def get_downloaded_uuids():
-    try:
-        if redis_client:
-            try:
-                return set(redis_client.smembers(DOWNLOADS_SET_KEY) or [])
-            except Exception:
-                logger.exception('Redis get_downloaded_uuids error, falling back to local file')
-        d = _load_local_downloads()
-        return set(d.keys())
-    except Exception:
-        logger.exception('get_downloaded_uuids error')
-        return set()
 
 def get_downloaded_meta():
+    """{uuid_doc: data do download} da pessoa logada."""
     try:
-        if redis_client:
-            try:
-                raw = redis_client.hgetall(DOWNLOADS_META_KEY) or {}
-                # convert json strings to dicts
-                return {k: json.loads(v) for k, v in raw.items()}
-            except Exception:
-                logger.exception('Redis get_downloaded_meta error, falling back to local file')
-        return _load_local_downloads()
+        return registro.baixados(auth.usuario_atual())
     except Exception:
-        logger.exception('get_downloaded_meta error')
+        logger.exception('Erro lendo o registro de downloads')
         return {}
+
+
+def get_downloaded_uuids():
+    return set(get_downloaded_meta())
 
 
 def _redis_key(uuid):
@@ -1520,14 +1498,13 @@ def refresh_batch():
 
 @app.route('/refresh-from-downloads', methods=['POST'])
 def refresh_from_downloads():
-    """Read uuids from local downloads.json and refresh their latest signature dates.
+    """Refresh the latest signature dates of the documents downloaded by the current user.
     Returns a mapping uuid -> formatted date or None.
     """
     try:
-        data = _load_local_downloads() or {}
-        if not isinstance(data, dict) or not data:
+        uuids = sorted(get_downloaded_uuids())
+        if not uuids:
             return jsonify({'ok': False, 'error': 'no downloads found', 'result': {}}), 200
-        uuids = list(data.keys())
         results = {}
         # throttle a bit to avoid bursts
         for u in uuids:
@@ -1567,12 +1544,12 @@ def refresh_from_downloads():
 
 @app.route('/register-dates', methods=['POST'])
 def register_dates():
-    """Persist available ultimaAssinatura for currently listed documents into downloads.json.
+    """Persist available ultimaAssinatura for currently listed documents into assinaturas.json.
     Returns mapping uuid -> formatted date for UI update.
     """
     try:
         # Load existing stored metadata first: prefer persisted signatures when present
-        all_meta = _load_local_downloads() or {}
+        all_meta = _load_assinaturas() or {}
         documentos = listar_documentos()
         results = {}
         changed = False
@@ -1672,14 +1649,7 @@ def register_dates():
         # persist any changes
         if changed:
             try:
-                if redis_client:
-                    for k, v in all_meta.items():
-                        try:
-                            redis_client.hset(DOWNLOADS_META_KEY, k, json.dumps(v, default=str, ensure_ascii=False))
-                        except Exception:
-                            logger.exception('Error writing registered dates to redis for %s', k)
-                else:
-                    _save_local_downloads(all_meta)
+                _save_assinaturas(all_meta)
             except Exception:
                 logger.exception('Error saving registered dates')
 
@@ -1706,25 +1676,7 @@ def index():
     # mark cofre and whether documento was previously downloaded within the last 60 days
     downloaded_meta = get_downloaded_meta() or {}
     recent_threshold = datetime.utcnow() - timedelta(days=60)
-    recent_downloaded = set()
-    for k, v in downloaded_meta.items():
-        try:
-            # v is expected to be a dict with 'downloaded_at' in ISO format
-            if isinstance(v, str):
-                v = json.loads(v)
-        except Exception:
-            pass
-        try:
-            dt_str = (v or {}).get('downloaded_at')
-            if not dt_str and isinstance(v, str):
-                # fallback: maybe stored as plain ISO string
-                dt = datetime.fromisoformat(v)
-            else:
-                dt = datetime.fromisoformat(dt_str) if dt_str else None
-        except Exception:
-            dt = None
-        if isinstance(dt, datetime) and dt >= recent_threshold:
-            recent_downloaded.add(k)
+    recent_downloaded = {u for u, dt in downloaded_meta.items() if isinstance(dt, datetime) and dt >= recent_threshold}
 
     for d in documentos:
         d["cofre_nome"] = cofre_map.get(d.get("cofre_uuid"), "Desconhecido")
@@ -1908,7 +1860,8 @@ def index():
                                   ICON_UP_JS=json.dumps(ICON_UP_SVG), ICON_DOWN_JS=json.dumps(ICON_DOWN_SVG),
                                   ICON_UP_WRAPPED_JS=json.dumps(ICON_UP_WRAPPED), ICON_DOWN_WRAPPED_JS=json.dumps(ICON_DOWN_WRAPPED),
                                   enable_scroll=enable_scroll,
-                                  total_downloaded=len(get_downloaded_uuids()),
+                                  total_downloaded=len(downloaded_meta),
+                                  usuario=auth.usuario_atual(), login_ativo=auth.LOGIN_ATIVO,
                                   auto_refresh_last=auto_refresh_last, auto_refresh_next=auto_refresh_next)
 
 
