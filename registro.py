@@ -5,6 +5,7 @@ reinícios e novos deploys. Sem ela, usa o arquivo downloads.json (útil só em 
 no Render o disco é apagado a cada reinício).
 
 Cada registro guarda apenas quem baixou, o identificador do documento na D4Sign e quando.
+As contas de login (usuarios) só existem com o banco configurado.
 """
 import json
 import logging
@@ -74,6 +75,26 @@ def baixados(usuario):
         except (TypeError, ValueError):
             continue
     return resultado
+
+
+def buscar_usuario(email):
+    """Conta cadastrada com esse e-mail ({id, nome, email, senha_hash}) ou None."""
+    with _pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("SELECT id, nome, email, senha_hash FROM usuarios WHERE email = %s", (email,))
+            linha = cur.fetchone()
+    return dict(zip(('id', 'nome', 'email', 'senha_hash'), linha)) if linha else None
+
+
+def criar_usuario(nome, email, senha_hash):
+    """Cria a conta e devolve seus dados, ou None se o e-mail já estiver cadastrado."""
+    with _pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO usuarios (nome, email, senha_hash) VALUES (%s, %s, %s)
+                           ON CONFLICT (email) DO NOTHING RETURNING id, nome, email""",
+                        (nome, email, senha_hash))
+            linha = cur.fetchone()
+    return dict(zip(('id', 'nome', 'email'), linha)) if linha else None
 
 
 def _ler_arquivo():
