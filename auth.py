@@ -1,12 +1,14 @@
 """Login do app.
 
 Hoje: cadastro e login com e-mail e senha, salvos no Supabase (tabela usuarios). Só e-mails do
-domínio DOMINIO_PERMITIDO (padrão: sitawi.net) conseguem se cadastrar. Fica ativo quando
-DATABASE_URL está configurada; sem banco o app funciona sem login, como antes.
+domínio DOMINIO_PERMITIDO (padrão: sitawi.net) conseguem se cadastrar, e a conta só entra depois
+que a pessoa abre o link de confirmação enviado para o e-mail (ver email_envio.py). Fica ativo
+quando DATABASE_URL está configurada; sem banco o app funciona sem login, como antes.
 
 Mais pra frente: login com conta Microsoft (Entra ID). O código está comentado no fim deste
 arquivo, esperando a liberação do T.I.
 """
+import hashlib
 import logging
 import os
 import re
@@ -14,9 +16,11 @@ import secrets
 import threading
 import time
 
-from flask import redirect, render_template_string, request, session, url_for
+from flask import current_app, redirect, render_template_string, request, session, url_for
+from itsdangerous import BadSignature, SignatureExpired, URLSafeTimedSerializer
 from werkzeug.security import check_password_hash, generate_password_hash
 
+import email_envio
 import registro
 
 logger = logging.getLogger(__name__)
@@ -26,7 +30,14 @@ SENHA_MINIMA = 8
 LOGIN_ATIVO = registro.usando_banco()
 
 # Rotas que funcionam sem login: as telas de acesso e o webhook chamado pela D4Sign
-ROTAS_PUBLICAS = {'login', 'cadastro', 'logout', 'webhook_d4sign', 'static'}
+ROTAS_PUBLICAS = {'login', 'cadastro', 'confirmar', 'reenviar_confirmacao', 'logout', 'webhook_d4sign', 'static'}
+
+VALIDADE_LINK = 24 * 60 * 60
+# Endereço público do site para montar o link do e-mail (o Render preenche RENDER_EXTERNAL_URL sozinho)
+URL_DO_SITE = (os.environ.get('APP_URL') or os.environ.get('RENDER_EXTERNAL_URL') or '').strip().rstrip('/')
+# Limite de e-mails de confirmação por endereço: 1 por minuto e 5 por hora
+_envios = {}
+_trava_envios = threading.Lock()
 
 # Trava simples contra força bruta: 5 senhas erradas para o mesmo e-mail bloqueiam por 15 minutos
 MAX_TENTATIVAS = 5
@@ -57,6 +68,38 @@ def _bloqueado(email):
 def _registrar_falha(email):
     with _trava_falhas:
         _falhas.setdefault(email, []).append(time.time())
+
+
+def _pode_enviar(email):
+    agora = time.time()
+    with _trava_envios:
+        recentes = [t for t in _envios.get(email, []) if agora - t < 3600]
+        if len(recentes) >= 5 or (recentes and agora - recentes[-1] < 60):
+            _envios[email] = recentes
+            return False
+        _envios[email] = recentes + [agora]
+        return True
+
+
+def _assinador():
+    return URLSafeTimedSerializer(current_app.secret_key, salt='confirmar-conta')
+
+
+def _marca_da_senha(usuario):
+    # o link só vale para o cadastro que o gerou: se alguém refizer o cadastro com outra senha, o link antigo morre
+    return hashlib.sha256(usuario['senha_hash'].encode()).hexdigest()[:16]
+
+
+def _enviar_confirmacao(usuario):
+    if not _pode_enviar(usuario['email']):
+        return
+    token = _assinador().dumps({'email': usuario['email'], 'id': str(usuario['id']), 'marca': _marca_da_senha(usuario)})
+    link = (URL_DO_SITE or request.url_root.rstrip('/')) + url_for('confirmar', token=token)
+    primeiro_nome = usuario['nome'].split()[0]
+    texto = (f'Olá, {primeiro_nome}!\n\nPara ativar sua conta no D4Sign Downloader, abra o link abaixo '
+             f'(vale por 24 horas):\n\n{link}\n\nSe você não pediu esse cadastro, ignore este e-mail.')
+    html = render_template_string(EMAIL_CONFIRMACAO, nome=primeiro_nome, link=link)
+    email_envio.enviar(usuario['email'], usuario['nome'], 'Confirme seu e-mail · D4Sign Downloader', texto, html)
 
 
 def _entrar(usuario):
@@ -110,6 +153,9 @@ def configurar(app):
             return _tela('login', email=email, erro='E-mail ou senha incorretos.'), 401
         with _trava_falhas:
             _falhas.pop(email, None)
+        if not usuario['confirmado_em']:
+            return _tela('pendente', email=email,
+                         aviso='Sua conta ainda não foi ativada. Abra o link que enviamos para o seu e-mail.'), 403
         return _entrar(usuario)
 
     @app.route('/cadastro', methods=['GET', 'POST'])
@@ -138,8 +184,43 @@ def configurar(app):
         if not usuario:
             return _tela('cadastro', nome=nome, email=email,
                          erro='Já existe uma conta com esse e-mail. Entre com a sua senha.'), 409
-        logger.info('Nova conta criada: %s', email)
+        logger.info('Cadastro aguardando confirmação: %s', email)
+        _enviar_confirmacao(usuario)
+        return _tela('pendente', email=email)
+
+    @app.route('/confirmar/<token>')
+    def confirmar(token):
+        if not LOGIN_ATIVO:
+            return redirect('/')
+        try:
+            dados = _assinador().loads(token, max_age=VALIDADE_LINK)
+        except SignatureExpired:
+            return _tela('login', erro='Esse link de confirmação expirou. Entre com seu e-mail e senha para receber outro.'), 400
+        except BadSignature:
+            return _tela('login', erro='Link de confirmação inválido.'), 400
+        usuario = registro.buscar_usuario(dados.get('email', ''))
+        if not usuario or str(usuario['id']) != dados.get('id') or _marca_da_senha(usuario) != dados.get('marca'):
+            return _tela('login', erro='Esse link não vale mais: o cadastro foi refeito depois dele. '
+                                       'Use o link do e-mail mais recente.'), 400
+        if usuario['confirmado_em']:
+            # link já usado: não serve de "senha" para entrar de novo
+            return _tela('login', email=usuario['email'], aviso='Sua conta já está ativa. Entre com seu e-mail e senha.')
+        usuario = registro.confirmar_usuario(usuario['id'])
+        logger.info('E-mail confirmado: %s', usuario['email'])
+        session['depois_do_login'] = '/'
         return _entrar(usuario)
+
+    @app.route('/confirmar/reenviar', methods=['POST'])
+    def reenviar_confirmacao():
+        if not LOGIN_ATIVO:
+            return redirect('/')
+        email = request.form.get('email', '').strip().lower()
+        usuario = registro.buscar_usuario(email) if email_permitido(email) else None
+        if usuario and not usuario['confirmado_em']:
+            _enviar_confirmacao(usuario)
+        # mesma resposta exista ou não o cadastro
+        return _tela('pendente', email=email, aviso='Se houver um cadastro pendente com esse e-mail, '
+                                                    'enviamos um novo link. Pode levar alguns minutos.')
 
     @app.route('/logout')
     def logout():
@@ -147,8 +228,8 @@ def configurar(app):
         return redirect(url_for('login') if LOGIN_ATIVO else '/')
 
 
-def _tela(modo, nome='', email='', erro=None):
-    return render_template_string(TELA_ACESSO, modo=modo, nome=nome, email=email, erro=erro,
+def _tela(modo, nome='', email='', erro=None, aviso=None):
+    return render_template_string(TELA_ACESSO, modo=modo, nome=nome, email=email, erro=erro, aviso=aviso,
                                   dominio=DOMINIO_PERMITIDO, senha_minima=SENHA_MINIMA)
 
 
@@ -157,10 +238,10 @@ TELA_ACESSO = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>{{ 'Entrar' if modo == 'login' else 'Criar conta' }} · D4Sign Downloader</title>
+<title>{{ {'login': 'Entrar', 'cadastro': 'Criar conta'}.get(modo, 'Confirme seu e-mail') }} · D4Sign Downloader</title>
 <style>
-  :root{--card-bg:#fff;--page-bg:#f6f7f9;--muted:#6b7280;--border:#e6e9ee;--text-color:#111;--btn-bg:#111;--btn-text:#fff;--erro-bg:#fef2f2;--erro-text:#b91c1c}
-  .dark-mode{--card-bg:#0b1220;--page-bg:#071018;--muted:#9aa4b2;--border:#1f2937;--text-color:#fff;--btn-bg:#fff;--btn-text:#111;--erro-bg:#3b1414;--erro-text:#fecaca}
+  :root{--card-bg:#fff;--page-bg:#f6f7f9;--muted:#6b7280;--border:#e6e9ee;--text-color:#111;--btn-bg:#111;--btn-text:#fff;--erro-bg:#fef2f2;--erro-text:#b91c1c;--aviso-bg:#eff6ff;--aviso-text:#1e40af}
+  .dark-mode{--card-bg:#0b1220;--page-bg:#071018;--muted:#9aa4b2;--border:#1f2937;--text-color:#fff;--btn-bg:#fff;--btn-text:#111;--erro-bg:#3b1414;--erro-text:#fecaca;--aviso-bg:#0f1f3d;--aviso-text:#bfdbfe}
   *,*::before,*::after{box-sizing:border-box}
   html:has(body.dark-mode){background:#071018}
   html{height:100%}
@@ -174,7 +255,10 @@ TELA_ACESSO = """<!DOCTYPE html>
   input{padding:11px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text-color);font-size:15px}
   input:focus{outline:2px solid var(--muted);outline-offset:1px}
   button{margin-top:4px;padding:12px;border:0;border-radius:8px;background:var(--btn-bg);color:var(--btn-text);font-size:15px;font-weight:600;cursor:pointer}
-  .erro{margin:0 0 16px;padding:10px 12px;border-radius:8px;background:var(--erro-bg);color:var(--erro-text);font-size:14px}
+  .erro,.aviso{margin:0 0 16px;padding:10px 12px;border-radius:8px;background:var(--erro-bg);color:var(--erro-text);font-size:14px}
+  .aviso{background:var(--aviso-bg);color:var(--aviso-text)}
+  .texto{margin:0 0 18px;font-size:15px;line-height:1.5}
+  button.secundario{background:transparent;color:var(--text-color);border:1px solid var(--border)}
   .troca{margin:18px 0 0;text-align:center;font-size:14px;color:var(--muted)}
   .troca a{color:var(--text-color)}
 </style>
@@ -191,13 +275,14 @@ TELA_ACESSO = """<!DOCTYPE html>
   <h1>Entrar</h1>
   <p class="sub">D4Sign Downloader</p>
   {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+  {% if aviso %}<p class="aviso" role="status">{{ aviso }}</p>{% endif %}
   <form method="post" action="/login">
     <label>E-mail<input type="email" name="email" value="{{ email }}" autocomplete="username" required autofocus></label>
     <label>Senha<input type="password" name="senha" autocomplete="current-password" required></label>
     <button type="submit">Entrar</button>
   </form>
   <p class="troca">Ainda não tem conta? <a href="/cadastro">Criar conta</a></p>
-  {% else %}
+  {% elif modo == 'cadastro' %}
   <h1>Criar conta</h1>
   <p class="sub">Disponível para e-mails @{{ dominio }}</p>
   {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
@@ -209,10 +294,38 @@ TELA_ACESSO = """<!DOCTYPE html>
     <button type="submit">Criar conta</button>
   </form>
   <p class="troca">Já tem conta? <a href="/login">Entrar</a></p>
+  {% else %}
+  <h1>Confirme seu e-mail</h1>
+  <p class="sub">D4Sign Downloader</p>
+  {% if aviso %}<p class="aviso" role="status">{{ aviso }}</p>{% endif %}
+  <p class="texto">Enviamos um link de ativação para <strong>{{ email }}</strong>. Abra o e-mail e clique no link
+    para entrar. Ele vale por 24 horas. Não chegou? Confira a caixa de spam.</p>
+  <form method="post" action="/confirmar/reenviar">
+    <input type="hidden" name="email" value="{{ email }}">
+    <button type="submit" class="secundario">Reenviar link</button>
+  </form>
+  <p class="troca"><a href="/login">Voltar para o login</a></p>
   {% endif %}
 </main>
 </body>
 </html>"""
+
+
+EMAIL_CONFIRMACAO = """<!DOCTYPE html>
+<html lang="pt-BR"><body style="margin:0;padding:24px;background:#f6f7f9;font-family:Arial,Helvetica,sans-serif;color:#111">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fff;border:1px solid #e6e9ee;border-radius:12px">
+      <tr><td style="padding:28px">
+        <h1 style="margin:0 0 16px;font-size:22px">Olá, {{ nome }}!</h1>
+        <p style="margin:0 0 22px;font-size:15px;line-height:1.5">Para ativar sua conta no D4Sign Downloader, clique no botão abaixo. O link vale por 24 horas.</p>
+        <p style="margin:0 0 22px"><a href="{{ link }}" style="display:inline-block;padding:12px 22px;background:#111;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Ativar minha conta</a></p>
+        <p style="margin:0 0 8px;font-size:13px;color:#6b7280">Se o botão não funcionar, copie este endereço no navegador:</p>
+        <p style="margin:0 0 22px;font-size:13px;word-break:break-all"><a href="{{ link }}" style="color:#111">{{ link }}</a></p>
+        <p style="margin:0;font-size:13px;color:#6b7280">Se você não pediu esse cadastro, ignore este e-mail.</p>
+      </td></tr>
+    </table>
+  </td></tr></table>
+</body></html>"""
 
 
 # ---------------------------------------------------------------------------------------------

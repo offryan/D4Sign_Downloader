@@ -77,24 +77,43 @@ def baixados(usuario):
     return resultado
 
 
+CAMPOS_USUARIO = ('id', 'nome', 'email', 'senha_hash', 'confirmado_em')
+
+
 def buscar_usuario(email):
-    """Conta cadastrada com esse e-mail ({id, nome, email, senha_hash}) ou None."""
+    """Conta cadastrada com esse e-mail ({id, nome, email, senha_hash, confirmado_em}) ou None."""
     with _pool.connection() as conn:
         with conn.cursor() as cur:
-            cur.execute("SELECT id, nome, email, senha_hash FROM usuarios WHERE email = %s", (email,))
+            cur.execute("SELECT id, nome, email, senha_hash, confirmado_em FROM usuarios WHERE email = %s", (email,))
             linha = cur.fetchone()
-    return dict(zip(('id', 'nome', 'email', 'senha_hash'), linha)) if linha else None
+    return dict(zip(CAMPOS_USUARIO, linha)) if linha else None
 
 
 def criar_usuario(nome, email, senha_hash):
-    """Cria a conta e devolve seus dados, ou None se o e-mail já estiver cadastrado."""
+    """Cria a conta (ainda sem e-mail confirmado) e devolve seus dados.
+
+    Se já existe um cadastro com esse e-mail que nunca foi confirmado, ele é substituído: assim
+    ninguém "reserva" o e-mail de um colega. Devolve None se o e-mail já tem conta confirmada.
+    """
     with _pool.connection() as conn:
         with conn.cursor() as cur:
             cur.execute("""INSERT INTO usuarios (nome, email, senha_hash) VALUES (%s, %s, %s)
-                           ON CONFLICT (email) DO NOTHING RETURNING id, nome, email""",
+                           ON CONFLICT (email) DO UPDATE SET nome = EXCLUDED.nome, senha_hash = EXCLUDED.senha_hash
+                           WHERE usuarios.confirmado_em IS NULL
+                           RETURNING id, nome, email, senha_hash, confirmado_em""",
                         (nome, email, senha_hash))
             linha = cur.fetchone()
-    return dict(zip(('id', 'nome', 'email'), linha)) if linha else None
+    return dict(zip(CAMPOS_USUARIO, linha)) if linha else None
+
+
+def confirmar_usuario(usuario_id):
+    """Marca o e-mail da conta como confirmado (mantém a data da primeira confirmação)."""
+    with _pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""UPDATE usuarios SET confirmado_em = COALESCE(confirmado_em, now())
+                           WHERE id = %s RETURNING id, nome, email, senha_hash, confirmado_em""", (usuario_id,))
+            linha = cur.fetchone()
+    return dict(zip(CAMPOS_USUARIO, linha)) if linha else None
 
 
 def _ler_arquivo():
