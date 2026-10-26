@@ -31,3 +31,7 @@ ALTER TABLE usuarios ENABLE ROW LEVEL SECURITY;
 REVOKE ALL ON TABLE usuarios FROM anon, authenticated;
 -- GRANT SELECT, INSERT ON TABLE usuarios TO d4sign_app;
 -- CREATE POLICY app_acesso ON usuarios FOR ALL TO d4sign_app USING (true) WITH CHECK (true);
+
+-- Confirmação de e-mail: a conta só entra depois de abrir o link enviado para o e-mail
+ALTER TABLE usuarios ADD COLUMN confirmado_em TIMESTAMPTZ;
+-- GRANT UPDATE (nome, senha_hash, confirmado_em) ON TABLE usuarios TO d4sign_app;
