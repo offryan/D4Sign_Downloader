@@ -79,3 +79,7 @@ cd D4Sign_Downloader
 ## Notes
 - This repository uses environment variables for secrets. Do not commit `TOKEN_API` or `CRYPT_KEY` to Git.
 - I added a few UI improvements (smooth scrolling when many results) and dark-mode scrollbar fixes.
+
+## 📄 License
+
+© 2025-2026 Ryan G. Santos. All rights reserved. The code is public for portfolio and evaluation purposes only: copying, modifying, distributing or using it commercially without written permission is not allowed. See the [LICENSE](LICENSE) file (in Portuguese).
