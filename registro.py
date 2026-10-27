@@ -92,14 +92,15 @@ def baixados(usuario):
 
 
 def baixados_por_documento(desde=None):
-    """Quem baixou cada documento: {uuid_doc: [{'usuario_id', 'nome', 'baixado_em'}, ...]} de todas as pessoas.
+    """Quem baixou cada documento: {uuid_doc: [{'usuario_id', 'nome', 'email', 'baixado_em'}, ...]} de todas as pessoas.
 
     desde (datetime UTC sem fuso) ignora os downloads anteriores a essa data; None traz todos.
-    O nome vem do cadastro (usuarios); sem ele, fica o e-mail ou o id gravado no download.
+    O nome e o e-mail vêm do cadastro (usuarios); sem ele, ficam o e-mail ou o id gravados no download.
     """
     resultado = {}
     if _pool:
-        sql = """SELECT d.uuid_doc, d.usuario_id, COALESCE(u.nome, d.usuario_email, d.usuario_id), d.baixado_em
+        sql = """SELECT d.uuid_doc, d.usuario_id, COALESCE(u.nome, d.usuario_email, d.usuario_id),
+                        COALESCE(u.email, d.usuario_email), d.baixado_em
                  FROM downloads d LEFT JOIN usuarios u ON u.id::text = d.usuario_id"""
         params = ()
         if desde:
@@ -108,9 +109,9 @@ def baixados_por_documento(desde=None):
         with _pool.connection() as conn:
             with conn.cursor() as cur:
                 cur.execute(sql, params)
-                for uuid_doc, usuario_id, nome, dt in cur.fetchall():
+                for uuid_doc, usuario_id, nome, email, dt in cur.fetchall():
                     resultado.setdefault(uuid_doc, []).append(
-                        {'usuario_id': usuario_id, 'nome': nome, 'baixado_em': dt.astimezone(timezone.utc).replace(tzinfo=None)})
+                        {'usuario_id': usuario_id, 'nome': nome, 'email': email, 'baixado_em': dt.astimezone(timezone.utc).replace(tzinfo=None)})
         return resultado
     with _trava_arquivo:
         dados = _ler_arquivo()
@@ -124,7 +125,7 @@ def baixados_por_documento(desde=None):
             dt = dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
             if desde and dt < desde:
                 continue
-            resultado.setdefault(uuid_doc, []).append({'usuario_id': usuario_id, 'nome': nome, 'baixado_em': dt})
+            resultado.setdefault(uuid_doc, []).append({'usuario_id': usuario_id, 'nome': nome, 'email': None, 'baixado_em': dt})
     return resultado
 
 

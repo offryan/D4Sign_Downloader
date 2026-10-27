@@ -15,6 +15,7 @@ Flask app to list and download signed documents from D4Sign, with team login and
   - **Baixado por outro** (yellow): only other people downloaded it
   - **Não baixado** (no color)
   - Hovering over a green or yellow tag lists who downloaded it and when, in alphabetical order, one per line
+- The **Baixado por** column shows the names of everyone who downloaded each document, side by side in alphabetical order (my own name in bold); hovering over a name shows that person's e-mail. The filter in its header lists the people who downloaded something in the current list and shows only the documents a given person downloaded (choosing a person switches the Status filter from "Não baixado" to "Todos")
 - The counter at the top shows, for the current list (safe, name and period filters), how many documents I downloaded and how many were downloaded only by other people. Downloads count within the last 60 days by default; if the period filter starts earlier, the window goes back to the start of the period
 - Microsoft (Entra ID) login is ready in `auth.py`, commented out until it is enabled
 - Optional Redis cache for signature dates, plus a background refresh worker
