@@ -57,6 +57,20 @@ def registrar(usuario, uuids):
         _salvar_arquivo(dados)
 
 
+def remover(usuario, uuid_doc):
+    """Tira a marcação de baixado de um documento para a pessoa (os das outras pessoas não mudam)."""
+    usuario = usuario or USUARIO_COMPARTILHADO
+    if _pool:
+        with _pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute("DELETE FROM downloads WHERE usuario_id = %s AND uuid_doc = %s", (usuario['id'], uuid_doc))
+        return
+    with _trava_arquivo:
+        dados = _ler_arquivo()
+        if dados.get(usuario['id'], {}).pop(uuid_doc, None) is not None:
+            _salvar_arquivo(dados)
+
+
 def baixados(usuario):
     """Retorna {uuid_doc: datetime (UTC, sem fuso)} dos documentos que a pessoa já baixou."""
     usuario = usuario or USUARIO_COMPARTILHADO

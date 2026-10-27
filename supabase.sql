@@ -35,3 +35,6 @@ REVOKE ALL ON TABLE usuarios FROM anon, authenticated;
 -- Confirmação de e-mail: a conta só entra depois de abrir o link enviado para o e-mail
 ALTER TABLE usuarios ADD COLUMN confirmado_em TIMESTAMPTZ;
 -- GRANT UPDATE (nome, senha_hash, confirmado_em) ON TABLE usuarios TO d4sign_app;
+
+-- Botão "×" da tag Baixado: a pessoa pode tirar a marcação de um documento
+-- GRANT DELETE ON TABLE downloads TO d4sign_app;
