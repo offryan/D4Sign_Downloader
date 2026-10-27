@@ -7,10 +7,15 @@ Flask app to list and download signed documents from D4Sign, with team login and
 ## Features
 
 - Lists finished (signed) documents from every safe ("cofre") in your D4Sign account
-- Filters by safe, document name, signature period and status (all, downloaded, not downloaded)
+- Filters by safe, document name, signature period and download status (all, downloaded by me, downloaded by someone else, not downloaded — the default). Only finished documents are fetched from D4Sign, so that status is not shown on screen
 - Downloads one document or a batch of selected documents as a single `.zip`. Batches are downloaded in parallel (6 at a time by default) with automatic retries, and any document that fails is reported
 - Login with e-mail and password, restricted to one e-mail domain (`@sitawi.net` by default). New accounts are activated through a confirmation link sent by e-mail
-- Each person has their own download history, saved in PostgreSQL (Supabase): downloaded documents get a "Baixado" tag, and the × on the tag removes it for that document
+- Each person has their own download history, saved in PostgreSQL (Supabase). The Status column shows it from the point of view of whoever is logged in:
+  - **Baixado por mim** (green): I downloaded it ("Baixado por mim e outros" when other people did too). The × removes only my mark; the row turns yellow if someone else also downloaded it
+  - **Baixado por outro** (yellow): only other people downloaded it
+  - **Não baixado** (no color)
+  - Hovering over a green or yellow tag lists who downloaded it and when, in alphabetical order, one per line
+- The counter at the top shows, for the current list (safe, name and period filters), how many documents I downloaded and how many were downloaded only by other people. Downloads count within the last 60 days by default; if the period filter starts earlier, the window goes back to the start of the period
 - Microsoft (Entra ID) login is ready in `auth.py`, commented out until it is enabled
 - Optional Redis cache for signature dates, plus a background refresh worker
 - Webhook endpoint (`POST /webhook/d4sign`) to receive signature updates from D4Sign
