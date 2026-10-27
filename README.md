@@ -1,27 +1,50 @@
 # D4Sign Downloader
 
-Flask app to list and download signed documents from D4Sign, with team login and a per-person record of what was already downloaded.
+Flask app for the Sitawi team to find and download signed documents from D4Sign. It shows, for each document, who on the team already downloaded it, so nobody downloads the same file twice or misses one.
 
-![D4Sign Downloader](docs/preview.png)
+![D4Sign Downloader — light mode](docs/preview.png)
+
+| Dark mode | Phone | Login |
+|---|---|---|
+| ![Dark mode](docs/preview-escuro.png) | ![Phone layout](docs/preview-celular.png) | ![Login page](docs/preview-login.png) |
+
+*Screenshots with fictitious documents and people.*
 
 ## Features
 
-- Lists finished (signed) documents from every safe ("cofre") in your D4Sign account
-- Filters by safe, document name, signature period and download status (not downloaded by anyone — the default, together with "all people" —, not downloaded by me, all, downloaded by me, downloaded by someone else). Only finished documents are fetched from D4Sign, so that status is not shown on screen
-- Downloads one document or a batch of selected documents as a single `.zip`. Batches are downloaded in parallel (6 at a time by default) with automatic retries, and any document that fails is reported
-- Login with e-mail and password, restricted to one e-mail domain (`@sitawi.net` by default). New accounts are activated through a confirmation link sent by e-mail
-- Each person has their own download history, saved in PostgreSQL (Supabase). The Status column shows it from the point of view of whoever is logged in:
-  - **Baixado por mim** (green): I downloaded it ("Baixado por mim e outros" when other people did too). The × removes only my mark; the row turns yellow if someone else also downloaded it
+### Finding documents
+- Lists the finished (signed) documents from every safe ("cofre") in the D4Sign account. Only finished documents are fetched, so that status is not shown on screen
+- All filters in one card at the top (they also work on phones): safe, document name (live search), signature period, download status and who downloaded
+- Opens on **Não baixado** (not downloaded by anyone) with **Todas as pessoas**; the other status options are *Não baixado por mim*, *Todos*, *Baixado por mim* and *Baixado por outro*
+- Sort by signature date by clicking the column header
+
+### Who downloaded what
+- Each person has their own download history, saved in PostgreSQL (Supabase). The **Status** column shows it from the point of view of whoever is logged in:
+  - **Baixado por mim** (green): I downloaded it (*Baixado por mim e outros* when other people did too). The × removes only my mark; the row turns yellow if someone else also downloaded it
   - **Baixado por outro** (yellow): only other people downloaded it
-  - **Não baixado** (no color)
-  - Hovering over a green or yellow tag lists who downloaded it and when, in alphabetical order, one per line
-- The **Baixado por** column shows the names of everyone who downloaded each document, side by side in alphabetical order (my own name in bold); hovering over a name shows that person's e-mail. The filter in its header lists the people who downloaded something in the current list and shows only the documents a given person downloaded (choosing a person switches the Status filter from "Não baixado" to "Todos")
-- The counter at the top shows, for the current list (safe, name and period filters), how many documents I downloaded and how many were downloaded only by other people. Downloads count within the last 60 days by default; if the period filter starts earlier, the window goes back to the start of the period
+  - **Não baixado** (no color): nobody downloaded it
+  - Hovering over a green or yellow tag lists who downloaded it and when, in alphabetical order
+- The **Baixado por** column shows everyone who downloaded each document, side by side in alphabetical order, with my own name in bold; hovering over a name shows that person's e-mail
+- The **Baixado por** filter shows only the documents a given person downloaded, and can be combined with the status filter (choosing a person while the status is *Não baixado* switches it to *Todos*)
+- Summary cards: documents in the list, downloaded by me and downloaded only by others, for the current safe, name and period filters
+- Downloads count within the last 60 days by default; if the period filter starts earlier, the window goes back to the start of the period
+
+### Downloading
+- Downloads one document or a batch of selected documents as a single `.zip`. Batches are downloaded in parallel (6 at a time by default) with automatic retries, and any document that fails is reported
+- After a download the list updates on its own: the documents turn green and the counters change, without reloading the page
+
+### Team login
+- Login with e-mail and password, restricted to one e-mail domain (`@sitawi.net` by default). New accounts are activated through a confirmation link sent by e-mail
 - Microsoft (Entra ID) login is ready in `auth.py`, commented out until it is enabled
+
+### Design
+- Sitawi visual identity (Tema Sitawi colors, blue `#276DBD` as the main color, Segoe UI), also on the login pages and the confirmation e-mail
+- Opens in light mode; dark mode is one click away and the choice is remembered in the browser
+- On phones each document becomes a card and the download button stays at the bottom of the screen
+
+### Integrations
 - Optional Redis cache for signature dates, plus a background refresh worker
 - Webhook endpoint (`POST /webhook/d4sign`) to receive signature updates from D4Sign
-- Layout with the Sitawi visual identity (Tema Sitawi colors, blue #276DBD as the main color, Segoe UI): all filters (safe, name, period, status and who downloaded) in a card at the top, so they also work on phones; summary cards with the list, "downloaded by me" and "downloaded by others" counts
-- Light mode by default and dark mode (the choice is remembered in the browser), with a card layout on phones
 
 **Stack:** Python, Flask, Requests, D4Sign REST API, PostgreSQL / Supabase (psycopg), Brevo (transactional e-mail), Redis (optional). Deployed on Render.
 
@@ -113,10 +136,11 @@ cd D4Sign_Downloader
 - `registro.py` — accounts and per-person download history (PostgreSQL or local file)
 - `email_envio.py` — sends e-mails through Brevo or SMTP
 - `supabase.sql` — database tables, row level security and permissions
+- `docs/` — screenshots used in this README
 
 ## Notes
 - This repository uses environment variables for secrets. Do not commit `TOKEN_API`, `CRYPT_KEY`, `DATABASE_URL`, `SECRET_KEY` or `BREVO_API_KEY` to Git.
-- The list adjusts to the window height and scrolls inside the table when there are many results, with dark-mode scrollbar fixes.
+- The list adjusts to the window height and scrolls inside the table when there are many results, keeping the header visible.
 
 ## 📄 License
 
