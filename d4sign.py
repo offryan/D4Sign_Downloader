@@ -420,7 +420,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
                 <!-- ordering is now controlled by clicking the table header -->
                 <input type="hidden" name="ordenar_por" id="ordenar_por" value="{{ ordenar_por or '' }}">
-                <!-- filtro de status de download: nao_baixado_mim (padrão), todos, baixado_mim, baixado_outro ou nao_baixado -->
+                <!-- filtro de status de download: nao_baixado (padrão), nao_baixado_mim, todos, baixado_mim ou baixado_outro -->
                 <input type="hidden" name="view_status" id="view_status_hidden" value="{{ view_status }}">
                 <!-- filtro por pessoa que baixou (id da conta); vazio = todas -->
                 <input type="hidden" name="baixado_por" id="baixado_por_hidden" value="{{ baixado_por }}">
@@ -901,7 +901,7 @@ TEMPLATE = r"""<!DOCTYPE html>
             };
             if(statusFilter && viewStatusHidden){
                 // initialize select based on hidden input
-                try{ if(viewStatusHidden.value) statusFilter.value = (viewStatusHidden.value || 'nao_baixado_mim'); }catch(e){}
+                try{ if(viewStatusHidden.value) statusFilter.value = (viewStatusHidden.value || 'nao_baixado'); }catch(e){}
                 statusFilter.addEventListener('change', function(){ viewStatusHidden.value = statusFilter.value; document.getElementById('filtro-form').submit(); });
             }
 
@@ -1768,11 +1768,11 @@ def index():
     cofre_selecionado = request.form.get("cofre")
     documentos = listar_documentos(cofre_selecionado)
 
-    # filtro de status de download (padrão: Não baixado por mim). Valores antigos continuam valendo em links salvos.
-    view_status = request.form.get('view_status') or request.args.get('view_status') or 'nao_baixado_mim'
+    # filtro de status de download (padrão: Não baixado, com Todas as pessoas). Valores antigos continuam valendo em links salvos.
+    view_status = request.form.get('view_status') or request.args.get('view_status') or 'nao_baixado'
     view_status = {'finalizado': 'todos', 'baixado': 'baixado_mim'}.get(view_status, view_status)
     if view_status not in ('nao_baixado_mim', 'todos', 'baixado_mim', 'baixado_outro', 'nao_baixado'):
-        view_status = 'nao_baixado_mim'
+        view_status = 'nao_baixado'
     # filtro por pessoa que baixou (id da conta); vazio = todas as pessoas
     baixado_por = (request.form.get('baixado_por') or request.args.get('baixado_por') or '').strip()
 

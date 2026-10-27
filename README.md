@@ -7,7 +7,7 @@ Flask app to list and download signed documents from D4Sign, with team login and
 ## Features
 
 - Lists finished (signed) documents from every safe ("cofre") in your D4Sign account
-- Filters by safe, document name, signature period and download status (not downloaded by me — the default, showing everything I haven't downloaded yet —, all, downloaded by me, downloaded by someone else, not downloaded by anyone). Only finished documents are fetched from D4Sign, so that status is not shown on screen
+- Filters by safe, document name, signature period and download status (not downloaded by anyone — the default, together with "all people" —, not downloaded by me, all, downloaded by me, downloaded by someone else). Only finished documents are fetched from D4Sign, so that status is not shown on screen
 - Downloads one document or a batch of selected documents as a single `.zip`. Batches are downloaded in parallel (6 at a time by default) with automatic retries, and any document that fails is reported
 - Login with e-mail and password, restricted to one e-mail domain (`@sitawi.net` by default). New accounts are activated through a confirmation link sent by e-mail
 - Each person has their own download history, saved in PostgreSQL (Supabase). The Status column shows it from the point of view of whoever is logged in:
