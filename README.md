@@ -20,7 +20,8 @@ Flask app to list and download signed documents from D4Sign, with team login and
 - Microsoft (Entra ID) login is ready in `auth.py`, commented out until it is enabled
 - Optional Redis cache for signature dates, plus a background refresh worker
 - Webhook endpoint (`POST /webhook/d4sign`) to receive signature updates from D4Sign
-- Light and dark mode, with a card layout on phones
+- Layout with the Sitawi visual identity (Tema Sitawi colors, blue #276DBD as the main color, Segoe UI): all filters (safe, name, period, status and who downloaded) in a card at the top, so they also work on phones; summary cards with the list, "downloaded by me" and "downloaded by others" counts
+- Light mode by default and dark mode (the choice is remembered in the browser), with a card layout on phones
 
 **Stack:** Python, Flask, Requests, D4Sign REST API, PostgreSQL / Supabase (psycopg), Brevo (transactional e-mail), Redis (optional). Deployed on Render.
 
