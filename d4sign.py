@@ -15,8 +15,9 @@ import re
 import base64
 import logging
 import time
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import os
+import unicodedata
 from functools import wraps
 import json
 import threading
@@ -120,6 +121,8 @@ TEMPLATE = r"""<!DOCTYPE html>
             --error-bg: #ef4444;
                 --download-badge-bg: #e6f7ef;
                 --download-badge-text: #065f46;
+                --other-badge-bg: #fef3c7;
+                --other-badge-text: #92400e;
                     --counter-flash-bg: #0b74de;
                     --counter-flash-text: #ffffff;
             --modal-bg: #fff;
@@ -144,6 +147,8 @@ TEMPLATE = r"""<!DOCTYPE html>
             --error-bg: #ef4444;
                 --download-badge-bg: #064e3b;
                 --download-badge-text: #dff7ea;
+                --other-badge-bg: #78350f;
+                --other-badge-text: #fde68a;
                 --counter-flash-bg: #60a5fa;
                 --counter-flash-text: #05203a;
                 --modal-bg: #071018;
@@ -330,8 +335,10 @@ TEMPLATE = r"""<!DOCTYPE html>
   pointer-events: auto;
 }
 
-/* Badge to indicate a downloaded document */
-.baixado-badge{display:inline-flex;align-items:center;gap:2px;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 4px 3px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+/* Status de download: verde = baixado por mim (com ×), amarelo = só outras pessoas baixaram, sem cor = não baixado */
+.baixado-badge{display:inline-flex;align-items:center;gap:2px;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 4px 3px 8px;border-radius:999px;font-size:12px;white-space:nowrap;cursor:default}
+.baixado-badge.baixado-outro{background:var(--other-badge-bg);color:var(--other-badge-text);padding-right:8px}
+.nao-baixado{font-size:12px;color:var(--muted);white-space:nowrap}
 /* × dentro da tag: tira a marcação de baixado só daquele documento */
 .remover-baixado{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.65}
 .remover-baixado:hover,.remover-baixado:focus-visible{opacity:1;background:rgba(0,0,0,.1)}
@@ -339,7 +346,8 @@ TEMPLATE = r"""<!DOCTYPE html>
 .remover-baixado:disabled{cursor:wait;opacity:.4}
 
 /* Small counter shown near the header */
-.downloaded-counter{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
+.downloaded-counter{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
+.downloaded-counter .sep{opacity:.6}
 .usuario-logado{font-size:13px;color:var(--muted);white-space:nowrap}
 .usuario-logado a{color:var(--text-color)}
 
@@ -393,7 +401,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 
                 <!-- ordering is now controlled by clicking the table header -->
                 <input type="hidden" name="ordenar_por" id="ordenar_por" value="{{ ordenar_por or '' }}">
-                <!-- filter for view status: default 'finalizado' or 'baixado' -->
+                <!-- filtro de status de download: todos, baixado_mim, baixado_outro ou nao_baixado (padrão) -->
                 <input type="hidden" name="view_status" id="view_status_hidden" value="{{ view_status }}">
             </form>
 
@@ -402,9 +410,12 @@ TEMPLATE = r"""<!DOCTYPE html>
                 <div style="display:flex;gap:12px;align-items:center">
                     <div style="color:var(--muted);font-size:13px"><div>Mostrando {{ documentos|length }} documentos</div></div>
 
-                    <div class="downloaded-counter" id="downloaded-counter" title="Total de arquivos baixados">
-                        <span style="font-weight:600">Baixados:</span>
-                        <span id="downloaded-count" class="count-val">{{ total_downloaded or 0 }}</span>
+                    <div class="downloaded-counter" id="downloaded-counter" title="Documentos da lista atual (cofre, nome e período filtrados). Por outros: baixados só por outras pessoas">
+                        <span style="font-weight:600">Baixados por mim:</span>
+                        <span id="downloaded-count" class="count-val">{{ total_mim or 0 }}</span>
+                        <span class="sep">·</span>
+                        <span style="font-weight:600">Por outros:</span>
+                        <span id="downloaded-others-count" class="count-val">{{ total_outros or 0 }}</span>
                     </div>
                     {% if usuario %}
                     <div class="usuario-logado" title="{{ usuario.email }}">{{ usuario.nome }} · <a href="/logout">Sair</a></div>
@@ -426,13 +437,14 @@ TEMPLATE = r"""<!DOCTYPE html>
                             <th style="width:140px" class="sortable {% if ordenar_por in ['data_desc','data_asc'] %}active-sort{% endif %}" id="th-data">Data <span id="sort-arrow-data">{% if ordenar_por=='data_desc' %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% elif ordenar_por=='data_asc' %}<span class="sort-icon">{{ ICON_DOWN|safe }}</span>{% else %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% endif %}</span></th>
 
                             <th style="width:160px">Cofre</th>
-                            <th style="width:120px">
+                            <th style="width:210px">
                                                 <div class="status-header" style="display:flex;align-items:center;gap:8px">
                                                     <span style="font-weight:600;font-size:13px">Status</span>
                                                     <select id="status-filter" name="status_filter" onchange="setViewStatusAndSubmit(this.value)" style="min-width:140px;padding:6px;border-radius:6px;border:1px solid var(--border)">
-                                                        <option value="finalizado" {% if view_status == 'finalizado' %}selected{% endif %}>Finalizado</option>
-                                                        <option value="baixado" {% if view_status == 'baixado' %}selected{% endif %}>Arquivos baixados</option>
-                                                        <option value="nao_baixado" {% if view_status == 'nao_baixado' %}selected{% endif %}>Não baixados</option>
+                                                        <option value="todos" {% if view_status == 'todos' %}selected{% endif %}>Todos</option>
+                                                        <option value="baixado_mim" {% if view_status == 'baixado_mim' %}selected{% endif %}>Baixado por mim</option>
+                                                        <option value="baixado_outro" {% if view_status == 'baixado_outro' %}selected{% endif %}>Baixado por outro</option>
+                                                        <option value="nao_baixado" {% if view_status == 'nao_baixado' %}selected{% endif %}>Não baixado</option>
                                                     </select>
                                                 </div>
                             </th>
@@ -450,10 +462,14 @@ TEMPLATE = r"""<!DOCTYPE html>
 
                             <td data-label="Cofre">{{ doc['cofre_nome'] }}</td>
                             <td data-label="Status">
-                                <span>{{ doc['statusName'] }}
-                                {% if doc.get('baixado') %}
-                                    <span class="baixado-badge">Baixado<button type="button" class="remover-baixado" data-uuid="{{ doc['uuidDoc'] }}" title="Remover a tag Baixado" aria-label="Remover a tag Baixado deste documento">&times;</button></span>
-                                {% endif %}</span>
+                                {# o servidor só lista documentos Finalizados; aqui aparece o status de download #}
+                                {% if doc.get('status_download') == 'mim' %}
+                                    <span class="baixado-badge" title="{{ doc['quem_baixou'] }}" aria-label="{{ doc['quem_baixou'] }}">{{ 'Baixado por mim e outros' if doc.get('outros_baixaram') else 'Baixado por mim' }}<button type="button" class="remover-baixado" data-uuid="{{ doc['uuidDoc'] }}" title="Remover a marcação de baixado por mim" aria-label="Remover a marcação de baixado por mim deste documento">&times;</button></span>
+                                {% elif doc.get('status_download') == 'outro' %}
+                                    <span class="baixado-badge baixado-outro" title="{{ doc['quem_baixou'] }}" aria-label="{{ doc['quem_baixou'] }}">Baixado por outro</span>
+                                {% else %}
+                                    <span class="nao-baixado">Não baixado</span>
+                                {% endif %}
                             </td>
                         </tr>
                         {% endfor %}
@@ -651,14 +667,29 @@ TEMPLATE = r"""<!DOCTYPE html>
                             var newSummary = doc.querySelector('.title-row > div > div');
                             var oldSummary = document.querySelector('.title-row > div > div');
                             if(newSummary && oldSummary) oldSummary.textContent = newSummary.textContent;
+                            // contadores "Baixados por mim" e "Por outros" seguem os filtros da lista
+                            ['downloaded-count', 'downloaded-others-count'].forEach(function(id){
+                                var novo = doc.getElementById(id), atual = document.getElementById(id);
+                                if(novo && atual && novo.textContent !== atual.textContent){ atual.textContent = novo.textContent; flashCounter(atual); }
+                            });
                             // refresh selection counter and master checkbox state
                             updateCounter();
                         }catch(e){ console.error('live-parse error', e); }
                     }).catch(function(e){ console.error('live-search error', e); });
             }
 
-            // usado depois de um download para as tags "Baixado" aparecerem sem recarregar a página
+            // usado depois de um download ou de um × para o status das linhas mudar sem recarregar a página
             window.atualizarLista = liveSearchSubmit;
+
+            // micro-flash no contador que mudou
+            function flashCounter(cv){
+                try{
+                    cv.classList.remove('flash');
+                    void cv.offsetWidth; // força reflow para reiniciar a animação
+                    cv.classList.add('flash');
+                    setTimeout(function(){ cv.classList.remove('flash'); }, 700);
+                }catch(e){}
+            }
 
             var buscarInput = document.getElementById('busca-nome');
             if(buscarInput){
@@ -785,7 +816,7 @@ TEMPLATE = r"""<!DOCTYPE html>
             }
             setupRange('btn-data-periodo','data-periodo','data-periodo-popup','data-periodo-start','data-periodo-end','data-periodo-apply','data-periodo-cancel','data_inicio_hidden','data_fim_hidden');
             setupRange('btn-ultima-periodo','ultima-periodo','ultima-periodo-popup','ultima-periodo-start','ultima-periodo-end','ultima-periodo-apply','ultima-periodo-cancel','ultima_inicio_hidden','ultima_fim_hidden');
-            // × da tag "Baixado": tira a marcação daquele documento (só para a pessoa logada).
+            // × da etiqueta "Baixado por mim": tira só a marcação da pessoa logada naquele documento.
             // Delegado no document porque a tabela é substituída a cada busca/ordenação.
             document.addEventListener('click', function(ev){
                 var btn = ev.target.closest && ev.target.closest('.remover-baixado');
@@ -794,27 +825,14 @@ TEMPLATE = r"""<!DOCTYPE html>
                 btn.disabled = true;
                 fetch('/baixados/remover', { method: 'POST', body: new URLSearchParams({ uuid: btn.dataset.uuid }) })
                     .then(function(r){ return r.json().then(function(j){ if(!r.ok || !j.ok) throw new Error(j.error || r.status); return j; }); })
-                    .then(function(j){
-                        var linha = btn.closest('tr');
-                        var badge = btn.closest('.baixado-badge');
-                        var vh = document.getElementById('view_status_hidden');
-                        if(vh && vh.value === 'baixado' && linha){
-                            // na lista "Arquivos baixados" o documento sai da lista
-                            linha.parentNode.removeChild(linha);
-                            var resumo = document.querySelector('.title-row > div > div');
-                            if(resumo){
-                                var n = document.querySelectorAll('table tbody tr').length;
-                                resumo.textContent = 'Mostrando ' + n + ' documentos';
-                            }
-                        } else if(badge){
-                            badge.parentNode.removeChild(badge);
-                        }
-                        var contador = document.getElementById('downloaded-count');
-                        if(contador && typeof j.total === 'number') contador.textContent = j.total;
+                    .then(function(){
+                        // o servidor recalcula a linha (amarela se outra pessoa baixou, "Não baixado" se ninguém),
+                        // tira da lista se ela não bate mais com o filtro e atualiza os contadores
+                        if(window.atualizarLista) window.atualizarLista();
                     })
                     .catch(function(){
                         btn.disabled = false;
-                        alert('Não foi possível remover a tag. Tente de novo.');
+                        alert('Não foi possível remover a marcação. Tente de novo.');
                     });
             });
 
@@ -867,12 +885,6 @@ TEMPLATE = r"""<!DOCTYPE html>
                 }
             })();
 
-            // initialize downloaded counter from server-rendered value
-            try{
-                var downloadedCountEl = document.getElementById('downloaded-count');
-                var downloadedCount = downloadedCountEl ? parseInt(downloadedCountEl.textContent, 10) || 0 : 0;
-            }catch(e){ var downloadedCount = 0; }
-
             // ensure status-filter selection updates the hidden view_status before submitting
             var statusFilter = document.getElementById('status-filter');
             var viewStatusHidden = document.getElementById('view_status_hidden');
@@ -880,7 +892,7 @@ TEMPLATE = r"""<!DOCTYPE html>
             window.setViewStatusAndSubmit = function(v){ try{ var vh = document.getElementById('view_status_hidden'); if(vh) vh.value = v; var f = document.getElementById('filtro-form'); if(f) f.submit(); }catch(e){} };
             if(statusFilter && viewStatusHidden){
                 // initialize select based on hidden input
-                try{ if(viewStatusHidden.value) statusFilter.value = (viewStatusHidden.value || 'finalizado'); }catch(e){}
+                try{ if(viewStatusHidden.value) statusFilter.value = (viewStatusHidden.value || 'nao_baixado'); }catch(e){}
                 statusFilter.addEventListener('change', function(){ viewStatusHidden.value = statusFilter.value; document.getElementById('filtro-form').submit(); });
             }
 
@@ -960,7 +972,6 @@ TEMPLATE = r"""<!DOCTYPE html>
                                 if(ct.indexOf('application/zip') !== -1 || ct.indexOf('application/octet-stream') !== -1){
                                     // capture zip-count header if present, then handle blob
                                     var zipCountHeader = resp.headers.get('X-Zip-Count');
-                                    var downloadedTotalHeader = resp.headers.get('X-Downloaded-Total');
                                     var falhasHeader = parseInt(resp.headers.get('X-Zip-Falhas'), 10) || 0;
                                     return resp.blob().then(function(blob){
                                         // try to extract filename from Content-Disposition
@@ -999,29 +1010,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                                             }catch(e){}
                                             // update modal to completed and enable close
                                             showSuccess('Download Concluído');
-                                        // increment downloaded counter visually with micro-flash
-                                        try{
-                                            // o servidor informa o total real (antes somava 1 por zip, mesmo com vários arquivos)
-                                            var totalServidor = parseInt(downloadedTotalHeader, 10);
-                                            downloadedCount = isNaN(totalServidor) ? (downloadedCount || 0) + (parseInt(zipCountHeader, 10) || 1) : totalServidor;
-                                            if(downloadedCountEl) downloadedCountEl.textContent = downloadedCount;
-                                            // add flash class to parent .count-val and remove after animation
-                                            try{
-                                                var cv = downloadedCountEl;
-                                                if(cv){
-                                                    cv.classList.remove('flash');
-                                                    // force reflow to restart animation
-                                                    void cv.offsetWidth;
-                                                    cv.classList.add('flash');
-                                                    var cleaned = false;
-                                                    var onend = function(){ if(!cleaned){ cleaned = true; cv.classList.remove('flash'); cv.removeEventListener('animationend', onend); } };
-                                                    cv.addEventListener('animationend', onend);
-                                                    // fallback removal after 700ms
-                                                    setTimeout(onend, 700);
-                                                }
-                                            }catch(e){}
-                                        }catch(e){}
-                                        // recarrega a lista para os documentos baixados ganharem a tag "Baixado"
+                                        // recarrega a lista: os documentos baixados ficam verdes e os contadores
+                                        // "Baixados por mim" / "Por outros" mudam (com o flash) conforme os filtros
                                         try{ if(window.atualizarLista) window.atualizarLista(); }catch(e){}
                                         // auto-hide after short delay (5s)
                                         setTimeout(function(){ hideModal(); }, 5000);
@@ -1105,6 +1095,44 @@ def get_downloaded_meta():
 
 def get_downloaded_uuids():
     return set(get_downloaded_meta())
+
+
+# Janela padrão do status de download; se o período filtrado começar antes, ela acompanha o filtro.
+JANELA_BAIXADOS_DIAS = 60
+FUSO_BRASILIA = timezone(timedelta(hours=-3))
+
+
+def _chave_nome(nome):
+    """Ordenação alfabética sem diferenciar maiúsculas nem acentos."""
+    return unicodedata.normalize('NFKD', nome or '').encode('ascii', 'ignore').decode().lower()
+
+
+def marcar_status_download(documentos, desde=None):
+    """Põe em cada documento o status de download visto pela pessoa logada.
+
+    status_download: 'mim' (eu baixei, mesmo que outros também), 'outro' (só outras pessoas) ou 'nao'.
+    quem_baixou: texto da dica com quem baixou e quando, em ordem alfabética, um por linha.
+    """
+    try:
+        por_doc = registro.baixados_por_documento(desde)
+    except Exception:
+        logger.exception('Erro lendo o registro de downloads')
+        por_doc = {}
+    usuario = auth.usuario_atual() or registro.USUARIO_COMPARTILHADO
+    meu_id = str(usuario.get('id'))
+    for d in documentos:
+        pessoas = por_doc.get(d.get('uuidDoc')) or []
+        eu = any(str(p['usuario_id']) == meu_id for p in pessoas)
+        outros = [p for p in pessoas if str(p['usuario_id']) != meu_id]
+        d['status_download'] = 'mim' if eu else ('outro' if outros else 'nao')
+        d['outros_baixaram'] = bool(eu and outros)
+        linhas = []
+        for p in sorted(pessoas, key=lambda p: _chave_nome(p['nome'])):
+            quando = p['baixado_em'].replace(tzinfo=timezone.utc).astimezone(FUSO_BRASILIA).strftime('%d/%m/%Y')
+            voce = ' (você)' if str(p['usuario_id']) == meu_id else ''
+            linhas.append(f"{p['nome']}{voce} em {quando}")
+        d['quem_baixou'] = ('Baixado por:\n' + '\n'.join(linhas)) if linhas else ''
+    return documentos
 
 
 def _redis_key(uuid):
@@ -1588,7 +1616,7 @@ def refresh_from_downloads():
 
 @app.route('/baixados/remover', methods=['POST'])
 def remover_baixado():
-    """Tira a tag "Baixado" de um documento, só para a pessoa logada."""
+    """Tira a marcação "Baixado por mim" de um documento, só para a pessoa logada (a das outras pessoas fica)."""
     uuid_doc = (request.form.get('uuid') or '').strip()
     if not uuid_doc:
         return jsonify({'ok': False, 'error': 'documento não informado'}), 400
@@ -1728,17 +1756,14 @@ def index():
     cofre_selecionado = request.form.get("cofre")
     documentos = listar_documentos(cofre_selecionado)
 
-    # view_status filter requested by UI: default 'nao_baixado' (show non-downloaded documents)
+    # filtro de status de download (padrão: Não baixado). Valores antigos continuam valendo em links salvos.
     view_status = request.form.get('view_status') or request.args.get('view_status') or 'nao_baixado'
-
-    # mark cofre and whether documento was previously downloaded within the last 60 days
-    downloaded_meta = get_downloaded_meta() or {}
-    recent_threshold = datetime.utcnow() - timedelta(days=60)
-    recent_downloaded = {u for u, dt in downloaded_meta.items() if isinstance(dt, datetime) and dt >= recent_threshold}
+    view_status = {'finalizado': 'todos', 'baixado': 'baixado_mim'}.get(view_status, view_status)
+    if view_status not in ('todos', 'baixado_mim', 'baixado_outro', 'nao_baixado'):
+        view_status = 'nao_baixado'
 
     for d in documentos:
         d["cofre_nome"] = cofre_map.get(d.get("cofre_uuid"), "Desconhecido")
-        d['baixado'] = (d.get('uuidDoc') in recent_downloaded)
         # signature-enrichment removed (we no longer show ultimaAssinatura)
 
     busca_nome = (request.form.get("busca_nome") or "").strip().lower()
@@ -1770,6 +1795,7 @@ def index():
             data_fim = today.strftime('%Y-%m-%d')
 
     # Filtro por campo "data" (dataAssinatura_dt)
+    dt_inicio = None
     if data_periodo:
         try:
             # Accept either ISO (YYYY-MM-DD - YYYY-MM-DD) or display format (DD/MM/YYYY - DD/MM/YYYY)
@@ -1822,11 +1848,27 @@ def index():
     elif ordenar_por == "data_asc":
         documentos.sort(key=lambda d: d.get("dataAssinatura_dt") or datetime.max)
 
+    # Status de download: vale o que foi baixado nos últimos 60 dias; se o período filtrado começa
+    # antes disso, a janela vai até o início do período. Sem período filtrado, vale tudo.
+    if data_periodo or (data_inicio and data_fim):
+        desde = datetime.utcnow() - timedelta(days=JANELA_BAIXADOS_DIAS)
+        if dt_inicio and dt_inicio < desde:
+            desde = dt_inicio
+    else:
+        desde = None
+    marcar_status_download(documentos, desde)
+    # contadores sobre a lista filtrada (cofre, nome, período), antes do filtro de status;
+    # "por outros" = só outras pessoas baixaram (os que eu também baixei ficam de fora)
+    total_mim = sum(1 for d in documentos if d['status_download'] == 'mim')
+    total_outros = sum(1 for d in documentos if d['status_download'] == 'outro')
+
     # Apply view filter
-    if view_status == 'baixado':
-        documentos = [d for d in documentos if d.get('baixado')]
+    if view_status == 'baixado_mim':
+        documentos = [d for d in documentos if d['status_download'] == 'mim']
+    elif view_status == 'baixado_outro':
+        documentos = [d for d in documentos if d['status_download'] == 'outro']
     elif view_status == 'nao_baixado':
-        documentos = [d for d in documentos if not d.get('baixado')]
+        documentos = [d for d in documentos if d['status_download'] == 'nao']
 
     # Limit rendering size
     MAX_RENDER = 2000
@@ -1874,8 +1916,7 @@ def index():
             try:
                 resp.headers['X-Zip-Count'] = str(len(used))
                 resp.headers['X-Zip-Falhas'] = str(len(falhas))
-                # total de documentos já baixados (sem repetição), para a página atualizar o contador
-                resp.headers['X-Downloaded-Total'] = str(len(get_downloaded_uuids()))
+                # os contadores são atualizados pela página ao recarregar a lista depois do download
             except Exception:
                 pass
             return resp
@@ -1918,7 +1959,7 @@ def index():
                                   ICON_UP_JS=json.dumps(ICON_UP_SVG), ICON_DOWN_JS=json.dumps(ICON_DOWN_SVG),
                                   ICON_UP_WRAPPED_JS=json.dumps(ICON_UP_WRAPPED), ICON_DOWN_WRAPPED_JS=json.dumps(ICON_DOWN_WRAPPED),
                                   enable_scroll=enable_scroll,
-                                  total_downloaded=len(downloaded_meta),
+                                  total_mim=total_mim, total_outros=total_outros,
                                   usuario=auth.usuario_atual(), login_ativo=auth.LOGIN_ATIVO,
                                   auto_refresh_last=auto_refresh_last, auto_refresh_next=auto_refresh_next)
 
