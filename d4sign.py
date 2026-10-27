@@ -273,6 +273,7 @@ TEMPLATE = r"""<!DOCTYPE html>
             .download-area{flex-direction:column;align-items:stretch;gap:12px}
             .download-area .download-btn{width:100%}
             .table-container.scroll-enabled{padding-right:0}
+            .remover-baixado{width:24px;height:24px;font-size:17px}
         }
         /* Scroll container that activates when many documents are shown. */
         .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding-right:6px}
@@ -330,7 +331,12 @@ TEMPLATE = r"""<!DOCTYPE html>
 }
 
 /* Badge to indicate a downloaded document */
-.baixado-badge{display:inline-block;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+.baixado-badge{display:inline-flex;align-items:center;gap:2px;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 4px 3px 8px;border-radius:999px;font-size:12px;margin-left:8px}
+/* × dentro da tag: tira a marcação de baixado só daquele documento */
+.remover-baixado{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.65}
+.remover-baixado:hover,.remover-baixado:focus-visible{opacity:1;background:rgba(0,0,0,.1)}
+.dark-mode .remover-baixado:hover,.dark-mode .remover-baixado:focus-visible{background:rgba(255,255,255,.15)}
+.remover-baixado:disabled{cursor:wait;opacity:.4}
 
 /* Small counter shown near the header */
 .downloaded-counter{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px}
@@ -388,7 +394,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                 <!-- ordering is now controlled by clicking the table header -->
                 <input type="hidden" name="ordenar_por" id="ordenar_por" value="{{ ordenar_por or '' }}">
                 <!-- filter for view status: default 'finalizado' or 'baixado' -->
-                <input type="hidden" name="view_status" id="view_status_hidden" value="{{ request.form.get('view_status','') or request.args.get('view_status','') or 'finalizado' }}">
+                <input type="hidden" name="view_status" id="view_status_hidden" value="{{ view_status }}">
             </form>
 
             <div class="title-row">
@@ -446,7 +452,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                             <td data-label="Status">
                                 <span>{{ doc['statusName'] }}
                                 {% if doc.get('baixado') %}
-                                    <span class="baixado-badge">Baixado</span>
+                                    <span class="baixado-badge">Baixado<button type="button" class="remover-baixado" data-uuid="{{ doc['uuidDoc'] }}" title="Remover a tag Baixado" aria-label="Remover a tag Baixado deste documento">&times;</button></span>
                                 {% endif %}</span>
                             </td>
                         </tr>
@@ -651,6 +657,9 @@ TEMPLATE = r"""<!DOCTYPE html>
                     }).catch(function(e){ console.error('live-search error', e); });
             }
 
+            // usado depois de um download para as tags "Baixado" aparecerem sem recarregar a página
+            window.atualizarLista = liveSearchSubmit;
+
             var buscarInput = document.getElementById('busca-nome');
             if(buscarInput){
                 var debounced = debounce(function(){
@@ -776,6 +785,39 @@ TEMPLATE = r"""<!DOCTYPE html>
             }
             setupRange('btn-data-periodo','data-periodo','data-periodo-popup','data-periodo-start','data-periodo-end','data-periodo-apply','data-periodo-cancel','data_inicio_hidden','data_fim_hidden');
             setupRange('btn-ultima-periodo','ultima-periodo','ultima-periodo-popup','ultima-periodo-start','ultima-periodo-end','ultima-periodo-apply','ultima-periodo-cancel','ultima_inicio_hidden','ultima_fim_hidden');
+            // × da tag "Baixado": tira a marcação daquele documento (só para a pessoa logada).
+            // Delegado no document porque a tabela é substituída a cada busca/ordenação.
+            document.addEventListener('click', function(ev){
+                var btn = ev.target.closest && ev.target.closest('.remover-baixado');
+                if(!btn) return;
+                ev.preventDefault();
+                btn.disabled = true;
+                fetch('/baixados/remover', { method: 'POST', body: new URLSearchParams({ uuid: btn.dataset.uuid }) })
+                    .then(function(r){ return r.json().then(function(j){ if(!r.ok || !j.ok) throw new Error(j.error || r.status); return j; }); })
+                    .then(function(j){
+                        var linha = btn.closest('tr');
+                        var badge = btn.closest('.baixado-badge');
+                        var vh = document.getElementById('view_status_hidden');
+                        if(vh && vh.value === 'baixado' && linha){
+                            // na lista "Arquivos baixados" o documento sai da lista
+                            linha.parentNode.removeChild(linha);
+                            var resumo = document.querySelector('.title-row > div > div');
+                            if(resumo){
+                                var n = document.querySelectorAll('table tbody tr').length;
+                                resumo.textContent = 'Mostrando ' + n + ' documentos';
+                            }
+                        } else if(badge){
+                            badge.parentNode.removeChild(badge);
+                        }
+                        var contador = document.getElementById('downloaded-count');
+                        if(contador && typeof j.total === 'number') contador.textContent = j.total;
+                    })
+                    .catch(function(){
+                        btn.disabled = false;
+                        alert('Não foi possível remover a tag. Tente de novo.');
+                    });
+            });
+
             // Dark mode toggle: persist in localStorage
             (function(){
                 var toggle = document.getElementById('dark-mode-toggle');
@@ -979,6 +1021,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                                                 }
                                             }catch(e){}
                                         }catch(e){}
+                                        // recarrega a lista para os documentos baixados ganharem a tag "Baixado"
+                                        try{ if(window.atualizarLista) window.atualizarLista(); }catch(e){}
                                         // auto-hide after short delay (5s)
                                         setTimeout(function(){ hideModal(); }, 5000);
                                     });
@@ -1542,6 +1586,20 @@ def refresh_from_downloads():
         return jsonify({'ok': False, 'error': 'internal error', 'result': {}}), 500
 
 
+@app.route('/baixados/remover', methods=['POST'])
+def remover_baixado():
+    """Tira a tag "Baixado" de um documento, só para a pessoa logada."""
+    uuid_doc = (request.form.get('uuid') or '').strip()
+    if not uuid_doc:
+        return jsonify({'ok': False, 'error': 'documento não informado'}), 400
+    try:
+        registro.remover(auth.usuario_atual(), uuid_doc)
+    except Exception:
+        logger.exception('Erro removendo a marcação de baixado de %s', uuid_doc)
+        return jsonify({'ok': False, 'error': 'não foi possível remover a marcação'}), 500
+    return jsonify({'ok': True, 'total': len(get_downloaded_uuids())})
+
+
 @app.route('/register-dates', methods=['POST'])
 def register_dates():
     """Persist available ultimaAssinatura for currently listed documents into assinaturas.json.
@@ -1854,7 +1912,7 @@ def index():
     return render_template_string(TEMPLATE, documentos=documentos, cofres=cofres,
                                   cofre_selecionado=cofre_selecionado,
                                   busca_nome=request.form.get("busca_nome", ""), data_inicio=data_inicio,
-                                  data_fim=data_fim, ordenar_por=ordenar_por,
+                                  data_fim=data_fim, ordenar_por=ordenar_por, view_status=view_status,
                                   ICON_UP=ICON_UP_SVG, ICON_DOWN=ICON_DOWN_SVG,
                                   ICON_SUN=ICON_SUN_SVG, ICON_MOON=ICON_MOON_SVG,
                                   ICON_UP_JS=json.dumps(ICON_UP_SVG), ICON_DOWN_JS=json.dumps(ICON_DOWN_SVG),
