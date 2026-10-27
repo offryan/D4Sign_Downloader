@@ -240,36 +240,45 @@ TELA_ACESSO = """<!DOCTYPE html>
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <title>{{ {'login': 'Entrar', 'cadastro': 'Criar conta'}.get(modo, 'Confirme seu e-mail') }} · D4Sign Downloader</title>
 <style>
-  :root{--card-bg:#fff;--page-bg:#f6f7f9;--muted:#6b7280;--border:#e6e9ee;--text-color:#111;--btn-bg:#111;--btn-text:#fff;--erro-bg:#fef2f2;--erro-text:#b91c1c;--aviso-bg:#eff6ff;--aviso-text:#1e40af}
-  .dark-mode{--card-bg:#0b1220;--page-bg:#071018;--muted:#9aa4b2;--border:#1f2937;--text-color:#fff;--btn-bg:#fff;--btn-text:#111;--erro-bg:#3b1414;--erro-text:#fecaca;--aviso-bg:#0f1f3d;--aviso-text:#bfdbfe}
+  /* mesma identidade visual da página principal (Tema Sitawi): creme, grafite e azul #276DBD */
+  :root{--card-bg:#fff;--page-bg:#F2F1EA;--muted:#5F5E57;--border:#E3E1D6;--text-color:#282828;--accent:#276DBD;--accent-hover:#1F5A9E;--accent-soft:#E4EDF8;--btn-text:#fff;--topbar-bg:#276DBD;--topbar-text:#E8E8DC;--erro-bg:#FDECE2;--erro-text:#A33B00;--aviso-bg:#E4EDF8;--aviso-text:#1F5A9E}
+  .dark-mode{--card-bg:#242423;--page-bg:#1B1B1A;--muted:#A9A89E;--border:#3A3936;--text-color:#E8E8DC;--accent:#5B9BE0;--accent-hover:#7DB1E8;--accent-soft:#1E3550;--btn-text:#111;--topbar-bg:#1F4F88;--erro-bg:#3D1E0B;--erro-text:#FFC6A3;--aviso-bg:#1E3550;--aviso-text:#C7DDF5}
   *,*::before,*::after{box-sizing:border-box}
-  html:has(body.dark-mode){background:#071018}
+  html:has(body.dark-mode){background:#1B1B1A}
   html{height:100%}
-  html,body{margin:0;background:var(--page-bg);color:var(--text-color);font-family:Inter, Arial, Helvetica, sans-serif}
-  body{min-height:100%;display:flex;align-items:center;justify-content:center;padding:24px 16px}
-  .card{width:100%;max-width:400px;background:var(--card-bg);border:1px solid var(--border);border-radius:12px;padding:28px;box-shadow:0 6px 18px rgba(15,23,42,0.06)}
-  h1{margin:0 0 4px;font-size:24px;letter-spacing:-0.02em}
-  .sub{margin:0 0 22px;color:var(--muted);font-size:14px}
-  form{display:flex;flex-direction:column;gap:14px}
-  label{display:flex;flex-direction:column;gap:6px;font-size:13px;color:var(--muted)}
-  input{padding:11px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text-color);font-size:15px}
-  input:focus{outline:2px solid var(--muted);outline-offset:1px}
-  button{margin-top:4px;padding:12px;border:0;border-radius:8px;background:var(--btn-bg);color:var(--btn-text);font-size:15px;font-weight:600;cursor:pointer}
-  .erro,.aviso{margin:0 0 16px;padding:10px 12px;border-radius:8px;background:var(--erro-bg);color:var(--erro-text);font-size:14px}
+  html,body{margin:0;background:var(--page-bg);color:var(--text-color);font-family:"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif}
+  body{min-height:100%;display:flex;flex-direction:column}
+  .topbar{background:var(--topbar-bg);color:var(--topbar-text);padding:14px 28px;display:flex;align-items:baseline;gap:14px}
+  .wordmark{font-weight:700;font-size:30px;letter-spacing:-.04em;line-height:1}
+  .app-nome{font-size:15px;font-weight:600;opacity:.9}
+  .conteudo{flex:1;display:flex;align-items:center;justify-content:center;padding:32px 16px}
+  .card{width:100%;max-width:420px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:32px;box-shadow:0 1px 2px rgba(40,40,40,.04), 0 6px 20px rgba(40,40,40,.06)}
+  h1{margin:0 0 6px;font-size:26px;letter-spacing:-0.02em}
+  .sub{margin:0 0 24px;color:var(--muted);font-size:15px}
+  form{display:flex;flex-direction:column;gap:16px}
+  label{display:flex;flex-direction:column;gap:6px;font-size:13px;font-weight:600;color:var(--muted)}
+  input{height:44px;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:var(--card-bg);color:var(--text-color);font:inherit;font-size:15px}
+  input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
+  button{margin-top:4px;height:46px;border:0;border-radius:10px;background:var(--accent);color:var(--btn-text);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
+  button:hover{background:var(--accent-hover)}
+  .erro,.aviso{margin:0 0 16px;padding:12px 14px;border-radius:10px;background:var(--erro-bg);color:var(--erro-text);font-size:14px}
   .aviso{background:var(--aviso-bg);color:var(--aviso-text)}
-  .texto{margin:0 0 18px;font-size:15px;line-height:1.5}
+  .texto{margin:0 0 20px;font-size:15px;line-height:1.55}
   button.secundario{background:transparent;color:var(--text-color);border:1px solid var(--border)}
-  .troca{margin:18px 0 0;text-align:center;font-size:14px;color:var(--muted)}
-  .troca a{color:var(--text-color)}
+  button.secundario:hover{border-color:var(--muted)}
+  .troca{margin:20px 0 0;text-align:center;font-size:14px;color:var(--muted)}
+  .troca a{color:var(--accent);font-weight:600}
+  @media (max-width:480px){.card{padding:24px}.topbar{padding:12px 16px}.wordmark{font-size:26px}}
 </style>
 <script>
-  // mesmo tema escolhido na página principal
-  try{ var t = localStorage.getItem('d4sign:dark_mode');
-       if(t === 'dark' || (t !== 'light' && matchMedia('(prefers-color-scheme: dark)').matches)) document.documentElement.classList.add('tema-escuro'); }catch(e){}
+  // mesmo tema escolhido na página principal (abre no claro; escuro só se a pessoa escolheu)
+  try{ if(localStorage.getItem('d4sign:dark_mode') === 'dark') document.documentElement.classList.add('tema-escuro'); }catch(e){}
 </script>
 </head>
 <body>
 <script>if(document.documentElement.classList.contains('tema-escuro')) document.body.classList.add('dark-mode');</script>
+<header class="topbar"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></header>
+<div class="conteudo">
 <main class="card">
   {% if modo == 'login' %}
   <h1>Entrar</h1>
@@ -307,21 +316,22 @@ TELA_ACESSO = """<!DOCTYPE html>
   <p class="troca"><a href="/login">Voltar para o login</a></p>
   {% endif %}
 </main>
+</div>
 </body>
 </html>"""
 
 
 EMAIL_CONFIRMACAO = """<!DOCTYPE html>
-<html lang="pt-BR"><body style="margin:0;padding:24px;background:#f6f7f9;font-family:Arial,Helvetica,sans-serif;color:#111">
+<html lang="pt-BR"><body style="margin:0;padding:24px;background:#F2F1EA;font-family:'Segoe UI',Arial,Helvetica,sans-serif;color:#282828">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center">
-    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fff;border:1px solid #e6e9ee;border-radius:12px">
+    <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:480px;background:#fff;border:1px solid #E3E1D6;border-radius:14px">
       <tr><td style="padding:28px">
         <h1 style="margin:0 0 16px;font-size:22px">Olá, {{ nome }}!</h1>
         <p style="margin:0 0 22px;font-size:15px;line-height:1.5">Para ativar sua conta no D4Sign Downloader, clique no botão abaixo. O link vale por 24 horas.</p>
-        <p style="margin:0 0 22px"><a href="{{ link }}" style="display:inline-block;padding:12px 22px;background:#111;color:#fff;border-radius:8px;text-decoration:none;font-weight:bold">Ativar minha conta</a></p>
-        <p style="margin:0 0 8px;font-size:13px;color:#6b7280">Se o botão não funcionar, copie este endereço no navegador:</p>
-        <p style="margin:0 0 22px;font-size:13px;word-break:break-all"><a href="{{ link }}" style="color:#111">{{ link }}</a></p>
-        <p style="margin:0;font-size:13px;color:#6b7280">Se você não pediu esse cadastro, ignore este e-mail.</p>
+        <p style="margin:0 0 22px"><a href="{{ link }}" style="display:inline-block;padding:12px 22px;background:#276DBD;color:#fff;border-radius:10px;text-decoration:none;font-weight:bold">Ativar minha conta</a></p>
+        <p style="margin:0 0 8px;font-size:13px;color:#5F5E57">Se o botão não funcionar, copie este endereço no navegador:</p>
+        <p style="margin:0 0 22px;font-size:13px;word-break:break-all"><a href="{{ link }}" style="color:#276DBD">{{ link }}</a></p>
+        <p style="margin:0;font-size:13px;color:#5F5E57">Se você não pediu esse cadastro, ignore este e-mail.</p>
       </td></tr>
     </table>
   </td></tr></table>

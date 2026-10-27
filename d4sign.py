@@ -100,280 +100,273 @@ TEMPLATE = r"""<!DOCTYPE html>
     <title>Documentos Assinados</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <style>
+        /* Identidade visual Sitawi (Tema Sitawi do Power BI): creme #E8E8DC, grafite #282828,
+           azul #276DBD (cor principal), verde #008F42, amarelo #D9D30E, laranja #E45300; fonte Segoe UI */
         :root{
-            --card-bg:#fff;
-            /* approximate single row height used for scroll container sizing; tweak if needed */
-            --row-height:56px;
-            --page-bg:#f6f7f9;
-            --muted:#6b7280;
-            --accent:#111827;
-            --border:#e6e9ee;
-            --text-color:#111111;
-            --btn-bg:#111111;
-            --btn-text:#ffffff;
-            /* Badge background for selected-count in light theme: light surface so text can be dark */
-            --badge-bg:#f3f4f6;
-            --selected-count-text: #111111; /* default for light theme: dark text on badge */
-            --selected-count-text: #111111; /* default for light theme: dark text on badge */
-            --spinner-border: rgba(0,0,0,0.12);
-            --spinner-top: rgba(0,0,0,0.7);
-            --success-bg: #10b981;
-            --error-bg: #ef4444;
-                --download-badge-bg: #e6f7ef;
-                --download-badge-text: #065f46;
-                --other-badge-bg: #fef3c7;
-                --other-badge-text: #92400e;
-                    --counter-flash-bg: #0b74de;
-                    --counter-flash-text: #ffffff;
-            --modal-bg: #fff;
-            --modal-text: var(--text-color);
-            --row-hover-bg: #fbfdff;
+            --page-bg:#F2F1EA;
+            --card-bg:#FFFFFF;
+            --surface-2:#F8F7F2;
+            --text-color:#282828;
+            --muted:#5F5E57;
+            --border:#E3E1D6;
+            --accent:#276DBD;
+            --accent-hover:#1F5A9E;
+            --accent-soft:#E4EDF8;
+            --accent-text:#FFFFFF;
+            --topbar-bg:#276DBD;
+            --topbar-text:#E8E8DC;
+            --btn-bg:var(--accent);
+            --btn-text:var(--accent-text);
+            --badge-bg:#F1F0EA;
+            --selected-count-text:#282828;
+            --row-height:60px;
+            --row-hover-bg:#F8F7F2;
+            --shadow:0 1px 2px rgba(40,40,40,.04), 0 6px 20px rgba(40,40,40,.06);
+            --radius:14px;
+            --spinner-border:rgba(40,40,40,.12);
+            --spinner-top:#276DBD;
+            --success-bg:#008F42;
+            --error-bg:#E45300;
+            --download-badge-bg:#E3F2E9;
+            --download-badge-text:#00672F;
+            --other-badge-bg:#F7F3C2;
+            --other-badge-text:#5E5A00;
+            --counter-flash-bg:#276DBD;
+            --counter-flash-text:#FFFFFF;
+            --modal-bg:#FFFFFF;
+            --modal-text:var(--text-color);
         }
-        /* Dark mode overrides: add class 'dark-mode' to <body> */
-        .dark-mode {
-            --card-bg:#0b1220;
-            --page-bg:#071018;
-            --muted:#9aa4b2;
-            --accent:#ffffff;
-            --border:#1f2937;
-            --text-color:#ffffff;
-            --btn-bg:#ffffff;
-            --btn-text:#111111;
-            /* Dark mode: use dark badge background so text (white) is readable */
-            --badge-bg:#111111;
-            --spinner-border: rgba(255,255,255,0.12);
-            --spinner-top: rgba(255,255,255,0.9);
-            --success-bg: #059669;
-            --error-bg: #ef4444;
-                --download-badge-bg: #064e3b;
-                --download-badge-text: #dff7ea;
-                --other-badge-bg: #78350f;
-                --other-badge-text: #fde68a;
-                --counter-flash-bg: #60a5fa;
-                --counter-flash-text: #05203a;
-                --modal-bg: #071018;
-                --modal-text: var(--text-color);
-                --row-hover-bg: rgba(255,255,255,0.03);
-                --selected-count-text: #ffffff; /* in dark mode, selected counter text should be white */
+        /* Modo escuro: grafite com textos no creme da marca */
+        .dark-mode{
+            --page-bg:#1B1B1A;
+            --card-bg:#242423;
+            --surface-2:#2C2C2A;
+            --text-color:#E8E8DC;
+            --muted:#A9A89E;
+            --border:#3A3936;
+            --accent:#5B9BE0;
+            --accent-hover:#7DB1E8;
+            --accent-soft:#1E3550;
+            --accent-text:#111111;
+            --topbar-bg:#1F4F88;
+            --topbar-text:#E8E8DC;
+            --badge-bg:#2F2F2D;
+            --selected-count-text:#E8E8DC;
+            --row-hover-bg:#2A2A28;
+            --shadow:0 1px 2px rgba(0,0,0,.3), 0 6px 20px rgba(0,0,0,.25);
+            --spinner-border:rgba(232,232,220,.15);
+            --spinner-top:#5B9BE0;
+            --success-bg:#00A84E;
+            --error-bg:#F06A1F;
+            --download-badge-bg:#123D26;
+            --download-badge-text:#BFE8CF;
+            --other-badge-bg:#3D3A07;
+            --other-badge-text:#EDE77A;
+            --counter-flash-bg:#5B9BE0;
+            --counter-flash-text:#111111;
+            --modal-bg:#242423;
         }
-    /* Forçar cor dos títulos da tabela no modo escuro para garantir legibilidade */
-    .dark-mode thead th,
-    .dark-mode thead th * {
-        color: var(--text-color) !important;
-    }
-    .dark-mode table thead th a {
-        color: var(--text-color) !important;
-    }
-    *,*::before,*::after{box-sizing:border-box}
-    /* o modo escuro fica no <body>; sem isso a margem do topo aparecia clara */
-    html:has(body.dark-mode){background:#071018}
-    /* min-height em vez de height e espaço do topo como padding: antes a margem do .page
-       "vazava" para fora do body, a página ficava mais alta que a tela e aparecia uma faixa no topo */
-    html{height:100%}
-    html,body{margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
-    body{min-height:100%}
-        .page{max-width:1400px;margin:0 auto;padding:46px 18px}
-    .card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 6px 18px rgba(15,23,42,0.06);transition:background-color .25s ease,box-shadow .25s ease}
-        .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
-        .controls .group{display:flex;flex-direction:column;gap:6px}
-        label{font-size:13px;color:var(--muted)}
-        /* Form controls: use card background and text color variables so contrast matches theme */
-        select,input[type=text],input[type=date]{padding:10px 12px;border:1px solid var(--border);border-radius:8px;background:var(--card-bg);color:var(--text-color)}
-        /* Ensure dropdown options inherit the correct colors (browser support varies) */
+        *,*::before,*::after{box-sizing:border-box}
+        /* o modo escuro fica no <body>; sem isso a margem do topo aparecia clara */
+        html:has(body.dark-mode){background:#1B1B1A}
+        html{height:100%}
+        html,body{margin:0;background:var(--page-bg);color:var(--text-color);font-family:"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif;font-size:15px;line-height:1.45;transition:background-color .25s ease,color .25s ease}
+        body{min-height:100%}
+        a{color:var(--accent)}
+        :focus-visible{outline:2px solid var(--accent);outline-offset:2px}
+
+        /* Faixa do topo com a marca */
+        .topbar{background:var(--topbar-bg);color:var(--topbar-text)}
+        .topbar-inner{max-width:1400px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
+        .marca{display:flex;align-items:baseline;gap:14px;min-width:0}
+        .wordmark{font-family:"Segoe UI", system-ui, sans-serif;font-weight:700;font-size:30px;letter-spacing:-.04em;line-height:1;color:var(--topbar-text)}
+        .app-nome{font-size:15px;font-weight:600;opacity:.9;white-space:nowrap}
+        .topbar-acoes{display:flex;align-items:center;gap:14px}
+        .usuario-logado{font-size:14px;white-space:nowrap;color:var(--topbar-text)}
+        .usuario-logado a{color:var(--topbar-text);font-weight:600}
+
+        .page{max-width:1400px;margin:0 auto;padding:32px 28px 48px;display:flex;flex-direction:column;gap:24px}
+        .page-head h1{margin:0;font-size:28px;font-weight:700;letter-spacing:-.02em}
+        .page-head .sub{margin:6px 0 0;color:var(--muted);font-size:15px}
+        .card{background:var(--card-bg);border:1px solid var(--border);border-radius:var(--radius);box-shadow:var(--shadow);transition:background-color .25s ease,border-color .25s ease}
+
+        /* Filtros: cartão no topo, em grade (no celular, um embaixo do outro) */
+        .filtros{padding:20px 24px}
+        .controls{display:grid;grid-template-columns:repeat(auto-fit,minmax(200px,1fr));gap:16px 20px;align-items:end}
+        .controls .group{display:flex;flex-direction:column;gap:6px;position:relative;min-width:0}
+        label{font-size:13px;font-weight:600;color:var(--muted)}
+        select,input[type=text],input[type=date]{width:100%;height:42px;padding:0 12px;border:1px solid var(--border);border-radius:10px;background:var(--card-bg);color:var(--text-color);font:inherit;font-size:14px;transition:border-color .15s ease,box-shadow .15s ease}
+        select:hover,input[type=text]:hover{border-color:var(--muted)}
+        select:focus,input[type=text]:focus,input[type=date]:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
         select option{background:var(--card-bg);color:var(--text-color)}
-    .title-row{display:flex;justify-content:space-between;align-items:center;margin:12px 0 18px}
-        h1{margin:0;font-size:28px;letter-spacing:-0.02em}
-        table{width:100%;border-collapse:collapse;margin-top:6px}
-        /* Ensure table header text follows the theme color in both light and dark modes */
-        thead th, thead th * { color: var(--text-color) !important; }
-        thead th a { color: inherit !important; }
-        thead th{font-weight:600;padding:12px 10px;border-bottom:1px solid var(--border);background:transparent;text-align:left}
-    tbody td{padding:14px 10px;border-bottom:1px solid var(--border);color:var(--text-color)}
-    tbody tr:hover td{background:var(--row-hover-bg)}
-    /* In dark mode ensure hovered row text (including links) uses the page text color */
-    .dark-mode tbody tr:hover td,
-    .dark-mode tbody tr:hover td .doc-name,
-    .dark-mode tbody tr:hover td a{
-        color: var(--text-color);
-    }
-    .doc-name{font-weight:500;min-width:240px}
-    .date-col{text-align:left;color:var(--muted)}
-    /* master checkbox / badge */
+        .campo-periodo{display:flex;gap:8px;align-items:center}
+        .campo-periodo input{flex:1;cursor:pointer}
+        .btn-icone{flex:0 0 42px;height:42px;display:inline-grid;place-items:center;border:1px solid var(--border);border-radius:10px;background:var(--surface-2);color:var(--text-color);cursor:pointer;font-size:17px}
+        .btn-icone:hover{border-color:var(--accent)}
+        .range-popup{position:absolute;top:100%;left:0;margin-top:6px;z-index:80;background:var(--card-bg);padding:14px;border:1px solid var(--border);box-shadow:var(--shadow);border-radius:12px;min-width:300px}
+        .range-popup .datas{display:flex;gap:8px;align-items:center}
+        .range-popup .acoes{display:flex;gap:8px;justify-content:flex-end;margin-top:12px}
+        .range-error{margin-top:8px;color:var(--error-bg);font-size:13px}
+
+        /* Resumo em cartões pequenos */
+        .resumo{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:16px}
+        .stat{padding:16px 20px;display:flex;flex-direction:column;gap:4px}
+        .stat-label{font-size:13px;font-weight:600;color:var(--muted)}
+        .stat-val{font-size:26px;font-weight:700;letter-spacing:-.02em;line-height:1.15;align-self:flex-start;border-radius:8px;padding:0 4px;margin-left:-4px}
+        .stat.mim .stat-val{color:var(--success-bg)}
+        .stat.outros .stat-val{color:var(--other-badge-text)}
+        .dark-mode .stat.outros .stat-val{color:var(--other-badge-text)}
+
+        /* Tabela */
+        .tabela{padding:8px 8px 0;overflow:hidden}
+        table{width:100%;border-collapse:separate;border-spacing:0}
+        thead th{font-size:13px;font-weight:600;color:var(--muted);text-align:left;padding:14px 16px;border-bottom:1px solid var(--border);background:var(--card-bg);white-space:nowrap}
+        tbody td{padding:16px;border-bottom:1px solid var(--border);color:var(--text-color);vertical-align:middle}
+        tbody tr:last-child td{border-bottom:none}
+        tbody tr{transition:background-color .12s ease}
+        tbody tr:hover td{background:var(--row-hover-bg)}
+        .doc-name{font-weight:600;min-width:240px}
+        .date-col{color:var(--muted);white-space:nowrap}
+        input[type=checkbox]{width:18px;height:18px;accent-color:var(--accent);cursor:pointer}
         .master-wrap{display:flex;align-items:center;gap:10px}
-        #master-check{width:18px;height:18px;cursor:pointer;border:1px solid #cbd5e1;border-radius:6px;background:#fff}
-    #selected-count{font-size:12px;color:var(--selected-count-text);background:var(--badge-bg);padding:6px 8px;border-radius:999px}
-    th.sortable{cursor:pointer;user-select:none}
-    th.sortable.active-sort{color:var(--accent);font-weight:700}
-    /* icons sizing: ensure icons occupy visible area and inherit color from theme */
-    #sort-arrow, #sort-arrow-data{display:inline-flex;align-items:center;margin-left:8px;color:var(--muted)}
-    .sort-icon{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;line-height:1;color:var(--muted)}
-    .sort-icon svg{width:100%;height:100%;display:block}
-    /* Ensure inline SVG icons inherit color so toggles are visible in both modes */
-    .sort-icon, .sort-icon svg { color: inherit; }
-    .sort-icon svg, #dark-mode-toggle svg{fill:currentColor;stroke:currentColor}
-    /* Force any nested SVG elements to adopt currentColor so icons are visible
-       even when SVGs include explicit path fills in source files. */
-    .sort-icon svg, .sort-icon svg *,
-    #sort-arrow svg, #sort-arrow svg *, #sort-arrow-data svg, #sort-arrow-data svg * {
-        fill: currentColor !important;
-        stroke: currentColor !important;
-    }
-    /* Scrollbar styling to avoid white track in dark mode and ensure transparent background behind scroll areas */
-    .table-container{background:transparent}
-    .table-container::-webkit-scrollbar{width:10px}
-    .table-container::-webkit-scrollbar-thumb{background:rgba(0,0,0,0.18);border-radius:8px}
-    .table-container::-webkit-scrollbar-track{background:transparent}
-    .dark-mode .table-container::-webkit-scrollbar-thumb{background:rgba(255,255,255,0.12)}
-    .dark-mode .table-container::-webkit-scrollbar-track{background:transparent}
-    .table-container{scrollbar-width:auto;scrollbar-color:rgba(0,0,0,0.18) transparent}
-    .dark-mode .table-container{scrollbar-color:rgba(255,255,255,0.12) transparent}
-    /* fallback <i> sizing */
-    .sort-icon i{font-style:normal;font-size:10px;line-height:10px;display:inline-block}
-    /* In dark mode make sort arrow icons fully visible (use --accent which is white) */
-    .dark-mode .sort-icon,
-    .dark-mode #sort-arrow,
-    .dark-mode #sort-arrow-data{
-        color: var(--accent);
-    }
-    .dark-mode .sort-icon svg,
-    .dark-mode .sort-icon path,
-    .dark-mode .sort-icon g{
-        fill: var(--accent) !important;
-        stroke: var(--accent) !important;
-    }
-    .dark-mode .sort-icon i{color:var(--accent)}
-    /* In dark mode make the sun toggle icon black for contrast against the white moon */
-    .dark-mode .toggle-sun svg,
-    .dark-mode .toggle-sun path,
-    .dark-mode .toggle-sun g{
-        fill: var(--btn-text) !important;
-        stroke: var(--btn-text) !important;
-        color: var(--btn-text) !important;
-    }
-    /* small spinner used while sorting */
-    .spinner{width:10px;height:10px;border:1.5px solid var(--spinner-border);border-top-color:var(--spinner-top);border-radius:50%;display:inline-block;vertical-align:middle;box-sizing:border-box;animation:spin .8s linear infinite}
-    @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
-        /* Download button */
-    .download-btn{background:var(--btn-bg);color:var(--btn-text);padding:12px 18px;border-radius:10px;border:none;cursor:pointer;font-weight:600;transition:background-color .2s ease,color .2s ease}
-        /* Dark mode toggle button styling */
-        #dark-mode-toggle{border:1px solid var(--border);padding:6px 8px;border-radius:8px;cursor:pointer;background:transparent;color:var(--muted);display:inline-grid;place-items:center;transition:background-color .2s ease,color .2s ease,border-color .2s ease}
+        #selected-count{font-size:12px;font-weight:600;color:var(--selected-count-text);background:var(--badge-bg);padding:4px 9px;border-radius:999px;min-width:26px;text-align:center}
+        th.sortable{cursor:pointer;user-select:none}
+        th.sortable:hover,th.sortable.active-sort{color:var(--text-color)}
+        #sort-arrow, #sort-arrow-data{display:inline-flex;align-items:center;margin-left:6px;color:inherit}
+        .sort-icon{width:14px;height:14px;display:inline-flex;align-items:center;justify-content:center;vertical-align:middle;line-height:1;color:inherit}
+        .sort-icon svg{width:100%;height:100%;display:block}
+        .sort-icon svg, .sort-icon svg *, #dark-mode-toggle svg, #sort-arrow svg, #sort-arrow svg *, #sort-arrow-data svg, #sort-arrow-data svg *{fill:currentColor !important;stroke:currentColor !important}
+        .sort-icon i{font-style:normal;font-size:10px;line-height:10px;display:inline-block}
+        .table-container{background:transparent}
+        .table-container::-webkit-scrollbar{width:10px}
+        .table-container::-webkit-scrollbar-thumb{background:rgba(40,40,40,.18);border-radius:8px}
+        .table-container::-webkit-scrollbar-track{background:transparent}
+        .dark-mode .table-container::-webkit-scrollbar-thumb{background:rgba(232,232,220,.16)}
+        .table-container{scrollbar-color:rgba(40,40,40,.18) transparent}
+        .dark-mode .table-container{scrollbar-color:rgba(232,232,220,.16) transparent}
+        .vazio{padding:48px 16px;text-align:center;color:var(--muted)}
+
+        /* Rodapé da tabela com o botão de download */
+        .download-area{display:flex;justify-content:space-between;align-items:center;gap:16px;padding:16px;border-top:1px solid var(--border);margin:0 -8px;background:var(--surface-2)}
+        .download-area .dica{color:var(--muted);font-size:14px}
+        .download-btn{background:var(--btn-bg);color:var(--btn-text);height:44px;padding:0 22px;border-radius:10px;border:none;cursor:pointer;font:inherit;font-weight:600;font-size:15px;transition:background-color .15s ease}
+        .download-btn:hover{background:var(--accent-hover)}
+        .btn-secundario{background:transparent;color:var(--text-color);height:38px;padding:0 16px;border-radius:10px;border:1px solid var(--border);cursor:pointer;font:inherit;font-size:14px}
+        .btn-secundario:hover{border-color:var(--muted)}
+        .range-popup .download-btn{height:38px;padding:0 16px;font-size:14px}
+
+        /* Botão de tema (fica na faixa azul) */
+        #dark-mode-toggle{width:38px;height:38px;border:1px solid rgba(232,232,220,.45);border-radius:10px;cursor:pointer;background:transparent !important;color:var(--topbar-text) !important;display:inline-grid;place-items:center}
+        #dark-mode-toggle:hover{background:rgba(232,232,220,.12) !important}
         #dark-mode-toggle .toggle-icon{grid-area:1/1;display:inline-block;line-height:0;transition:opacity .25s ease,transform .25s ease;opacity:0;transform:scale(.9);width:18px;height:18px}
         #dark-mode-toggle .toggle-icon svg{width:18px;height:18px;display:block}
         #dark-mode-toggle .toggle-icon.visible{opacity:1;transform:scale(1)}
-        .download-area{display:flex;justify-content:space-between;align-items:center;margin-top:18px}
-        /* Small screen: make table rows stacked cards */
+
+        .spinner{width:10px;height:10px;border:1.5px solid var(--spinner-border);border-top-color:var(--spinner-top);border-radius:50%;display:inline-block;vertical-align:middle;animation:spin .8s linear infinite}
+        @keyframes spin{from{transform:rotate(0)}to{transform:rotate(360deg)}}
+
+        /* Lista com rolagem própria quando há muitos documentos; cabeçalho fixo */
+        .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch}
+        @media (min-width:721px){
+            .table-container.scroll-enabled{max-height:max(320px, min(calc(var(--row-height) * 10), calc(100vh - 470px)))}
+            .table-container.scroll-enabled thead th{position:sticky;top:0;z-index:3}
+        }
+
+        /* Celular: filtros empilhados e cada documento vira um cartão */
         @media (max-width:720px){
-            .controls{flex-direction:column;align-items:stretch}
-            .title-row{flex-direction:column;align-items:flex-start;gap:10px}
-            .title-row > div{flex-wrap:wrap;row-gap:8px}
-            .title-row > div > div:first-child{white-space:nowrap}
+            .topbar-inner{padding:12px 16px}
+            .wordmark{font-size:26px}
+            .app-nome{display:none}
+            .page{padding:20px 14px 32px;gap:18px}
+            .page-head h1{font-size:24px}
+            .filtros{padding:16px}
+            .controls{grid-template-columns:1fr;gap:14px}
+            .resumo{grid-template-columns:repeat(3,minmax(0,1fr));gap:10px}
+            .stat{padding:12px 14px}
+            .stat-label{font-size:12px}
+            .stat-val{font-size:22px}
+            .tabela{background:transparent;border:none;box-shadow:none;padding:0;overflow:visible}
             table thead{display:none}
             table, tbody, tr, td{display:block;width:100%}
-            tbody tr{margin:10px 0;padding:6px 12px;border-radius:10px;background:var(--card-bg);border:1px solid var(--border)}
-            tbody td{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 0;text-align:right;overflow-wrap:anywhere}
+            tbody tr{margin:0 0 14px;padding:6px 16px;border-radius:var(--radius);background:var(--card-bg);border:1px solid var(--border);box-shadow:var(--shadow)}
+            tbody tr:hover td{background:transparent}
+            tbody td{display:flex;justify-content:space-between;align-items:center;gap:14px;padding:12px 0;text-align:right;overflow-wrap:anywhere}
             tbody tr td:last-child{border-bottom:none}
-            tbody td::before{content:attr(data-label);color:var(--muted);font-size:12px;text-align:left;flex-shrink:0}
-            tbody td.doc-name{display:block;text-align:left;font-weight:600}
+            tbody td::before{content:attr(data-label);color:var(--muted);font-size:13px;font-weight:600;text-align:left;flex-shrink:0}
+            tbody td.doc-name{display:block;text-align:left;font-size:16px;min-width:0}
             tbody td.doc-name::before{content:none}
-            .download-area{flex-direction:column;align-items:stretch;gap:12px}
+            .download-area{flex-direction:column;align-items:stretch;margin:0;border:1px solid var(--border);border-radius:var(--radius);position:sticky;bottom:12px;box-shadow:var(--shadow);background:var(--card-bg)}
             .download-area .download-btn{width:100%}
-            .table-container.scroll-enabled{padding-right:0}
             .remover-baixado{width:24px;height:24px;font-size:17px}
             .baixado-por .pessoas{justify-content:flex-end}
-        }
-        /* Scroll container that activates when many documents are shown. */
-        .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding-right:6px}
-        /* Keep the table header visible while scrolling on larger screens */
-        @media (min-width:721px){
-            /* no desktop a lista se ajusta à altura da janela, para não rolar a página e a lista ao mesmo tempo */
-            .table-container.scroll-enabled{max-height:max(240px, min(calc(var(--row-height) * 9), calc(100vh - 430px)))}
-            .table-container.scroll-enabled thead th{position:sticky;top:0;background:var(--card-bg);z-index:3}
+            .range-popup{min-width:0;left:0;right:0}
+            .range-popup .datas{flex-direction:column;align-items:stretch}
         }
 
     /* Estilo do modal */
-    .modal {
-  display: none;
-  position: fixed;
-  z-index: 2000;
-  left: 0; top: 0;
-  width: 100%; height: 100%;
-  background: rgba(0,0,0,0.6);
-}
-.modal-content {
-    position: relative;
-    background: var(--modal-bg);
-    margin: 12% auto;
-    padding: 20px;
-    border-radius: 12px;
-    width: 420px;
-    text-align: center;
-    box-shadow: 0 8px 24px rgba(0,0,0,0.18);
-    color: var(--modal-text);
-}
-.modal-content h2 {
-    font-size: 18px;
-    margin: 0 0 6px;
-}
-.modal-content .modal-body{display:flex;flex-direction:column;align-items:center;gap:10px;padding:6px}
-.modal-spinner{width:72px;height:72px;border:8px solid var(--spinner-border);border-top-color:var(--spinner-top);border-radius:50%;box-sizing:border-box;animation:spin .8s linear infinite}
-.modal-icon{width:64px;height:64px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:28px}
-.modal-icon.success{background:var(--success-bg);color:#fff}
-.modal-icon.error{background:var(--error-bg);color:#fff}
-.modal-content .msg{font-size:15px;color:var(--muted);max-width:360px}
-.modal-actions{display:flex;gap:8px;margin-top:6px}
-.modal .close {
-  position: absolute;
-  top: 10px; right: 15px;
-  font-size: 22px;
-  font-weight: bold;
-  color: #aaa;
-  cursor: not-allowed;
-  pointer-events: none;
-}
-.modal .close.enabled {
-  color: #333;
-  cursor: pointer;
-  pointer-events: auto;
-}
+    .modal{display:none;position:fixed;z-index:2000;left:0;top:0;width:100%;height:100%;background:rgba(27,27,26,.6)}
+    .modal-content{position:relative;background:var(--modal-bg);margin:12% auto;padding:28px 24px;border-radius:16px;width:min(420px, calc(100% - 32px));text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25);color:var(--modal-text)}
+    .modal-content h2{font-size:18px;margin:0 0 6px}
+    .modal-content .modal-body{display:flex;flex-direction:column;align-items:center;gap:12px;padding:6px}
+    .modal-spinner{width:64px;height:64px;border:7px solid var(--spinner-border);border-top-color:var(--spinner-top);border-radius:50%;animation:spin .8s linear infinite}
+    .modal-icon{width:60px;height:60px;border-radius:999px;display:flex;align-items:center;justify-content:center;font-size:28px}
+    .modal-icon.success{background:var(--success-bg);color:#fff}
+    .modal-icon.error{background:var(--error-bg);color:#fff}
+    .modal-content .msg{font-size:15px;color:var(--muted);max-width:360px}
+    .modal-actions{display:flex;gap:8px;margin-top:6px}
+    .modal .close{position:absolute;top:10px;right:15px;font-size:22px;font-weight:bold;color:var(--muted);opacity:.5;cursor:not-allowed;pointer-events:none}
+    .modal .close.enabled{opacity:1;color:var(--text-color);cursor:pointer;pointer-events:auto}
 
-/* Status de download: verde = baixado por mim (com ×), amarelo = só outras pessoas baixaram, sem cor = não baixado */
-.baixado-badge{display:inline-flex;align-items:center;gap:2px;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 4px 3px 8px;border-radius:999px;font-size:12px;white-space:nowrap;cursor:default}
-.baixado-badge.baixado-outro{background:var(--other-badge-bg);color:var(--other-badge-text);padding-right:8px}
-.nao-baixado{font-size:12px;color:var(--muted);white-space:nowrap}
-/* Coluna "Baixado por": um nome ao lado do outro (e-mail ao passar o mouse); o meu em negrito */
-.baixado-por .pessoas{display:inline-flex;flex-wrap:wrap;gap:4px}
-.pessoa-chip{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--badge-bg);color:var(--text-color);font-size:12px;white-space:nowrap;cursor:default}
-.pessoa-chip.eu{font-weight:700}
-/* × dentro da tag: tira a marcação de baixado só daquele documento */
-.remover-baixado{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.65}
-.remover-baixado:hover,.remover-baixado:focus-visible{opacity:1;background:rgba(0,0,0,.1)}
-.dark-mode .remover-baixado:hover,.dark-mode .remover-baixado:focus-visible{background:rgba(255,255,255,.15)}
-.remover-baixado:disabled{cursor:wait;opacity:.4}
+    /* Status de download: verde = baixado por mim (com ×), amarelo = só outras pessoas baixaram, sem cor = não baixado */
+    .baixado-badge{display:inline-flex;align-items:center;gap:4px;background:var(--download-badge-bg);color:var(--download-badge-text);padding:4px 6px 4px 12px;border-radius:999px;font-size:13px;font-weight:600;white-space:nowrap;cursor:default}
+    .baixado-badge.baixado-outro{background:var(--other-badge-bg);color:var(--other-badge-text);padding-right:12px}
+    .nao-baixado{font-size:13px;color:var(--muted);white-space:nowrap}
+    /* Coluna "Baixado por": um nome ao lado do outro (e-mail ao passar o mouse); o meu em negrito */
+    .baixado-por .pessoas{display:inline-flex;flex-wrap:wrap;gap:6px}
+    .pessoa-chip{display:inline-block;padding:3px 10px;border-radius:999px;border:1px solid var(--border);background:var(--badge-bg);color:var(--text-color);font-size:13px;white-space:nowrap;cursor:default}
+    .pessoa-chip.eu{font-weight:700}
+    /* × dentro da tag: tira a marcação de baixado só daquele documento */
+    .remover-baixado{display:inline-flex;align-items:center;justify-content:center;width:20px;height:20px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font-size:16px;line-height:1;cursor:pointer;opacity:.7}
+    .remover-baixado:hover,.remover-baixado:focus-visible{opacity:1;background:rgba(0,0,0,.08)}
+    .dark-mode .remover-baixado:hover,.dark-mode .remover-baixado:focus-visible{background:rgba(255,255,255,.15)}
+    .remover-baixado:disabled{cursor:wait;opacity:.4}
 
-/* Small counter shown near the header */
-.downloaded-counter{font-size:13px;color:var(--muted);display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.downloaded-counter .sep{opacity:.6}
-.usuario-logado{font-size:13px;color:var(--muted);white-space:nowrap}
-.usuario-logado a{color:var(--text-color)}
-
-/* micro-flash animation for counter */
-.downloaded-counter .count-val{display:inline-block;padding:3px 6px;border-radius:6px;transition:transform .18s ease}
-.downloaded-counter .count-val.flash{animation:counterFlash .45s ease both}
-@keyframes counterFlash{
-    0% { transform: scale(1); background: transparent; color: inherit }
-    30% { transform: scale(1.18); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
-    70% { transform: scale(1.04); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
-    100% { transform: scale(1); background: transparent; color: inherit }
-}
+    /* micro-flash quando um contador muda */
+    .count-val.flash{animation:counterFlash .45s ease both}
+    @keyframes counterFlash{
+        0% { transform: scale(1); background: transparent }
+        30% { transform: scale(1.12); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
+        70% { transform: scale(1.03); background: var(--counter-flash-bg); color: var(--counter-flash-text) }
+        100% { transform: scale(1); background: transparent }
+    }
     </style>
 </head>
 <body>
+    <header class="topbar">
+        <div class="topbar-inner">
+            <div class="marca"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></div>
+            <div class="topbar-acoes">
+                {% if usuario %}
+                <div class="usuario-logado" title="{{ usuario.email }}">{{ usuario.nome }} · <a href="/logout">Sair</a></div>
+                {% endif %}
+                <button id="dark-mode-toggle" title="Alternar modo noturno" aria-label="Alternar modo noturno">
+                    <span class="toggle-icon toggle-sun" aria-hidden="true"></span>
+                    <span class="toggle-icon toggle-moon" aria-hidden="true"></span>
+                </button>
+            </div>
+        </div>
+    </header>
     <div class="page">
-        <div class="card">
+        <div class="page-head">
+            <h1>Documentos assinados</h1>
+            <p class="sub">Documentos finalizados no D4Sign, prontos para baixar</p>
+        </div>
+
+        <section class="card filtros" aria-label="Filtros">
             <form method="POST" id="filtro-form" class="controls">
                 <div class="group">
-                    <label>Lote por fundo</label>
-                    <select name="cofre" onchange="this.form.submit()">
+                    <label for="filtro-cofre">Lote por fundo</label>
+                    <select id="filtro-cofre" name="cofre" onchange="this.form.submit()">
                         <option value="">Todos os cofres</option>
                         {% for cofre in cofres %}
                             <option value="{{ cofre.get('uuid') or cofre.get('uuid_safe') or cofre.get('uuid-safe') }}"
@@ -384,24 +377,44 @@ TEMPLATE = r"""<!DOCTYPE html>
                     </select>
                 </div>
                 <div class="group">
-                    <label>Buscar por nome</label>
+                    <label for="busca-nome">Buscar por nome</label>
                     <input type="text" id="busca-nome" name="busca_nome" value="{{ busca_nome }}" placeholder="Pesquisar documento..." autocomplete="off">
                 </div>
 
-                <div class="group" style="position:relative">
-                    <label>Período (assinatura)</label>
-                    <div style="display:flex;gap:8px;align-items:center">
-                        <input type="text" id="data-periodo" name="data_periodo" placeholder="YYYY-MM-DD - YYYY-MM-DD" value="{{ (data_inicio and data_fim) and (data_inicio ~ ' - ' ~ data_fim) or (data_periodo or '') }}" readonly style="cursor:pointer">
-                        <button type="button" class="download-btn" id="btn-data-periodo" style="padding:6px 8px">📅</button>
+                <div class="group">
+                    <label for="data-periodo">Período (assinatura)</label>
+                    <div class="campo-periodo">
+                        <input type="text" id="data-periodo" name="data_periodo" placeholder="AAAA-MM-DD - AAAA-MM-DD" value="{{ (data_inicio and data_fim) and (data_inicio ~ ' - ' ~ data_fim) or (data_periodo or '') }}" readonly>
+                        <button type="button" class="btn-icone" id="btn-data-periodo" title="Escolher período" aria-label="Escolher período">📅</button>
                     </div>
                     <!-- hidden fields to submit legacy names -->
                     <input type="hidden" name="data_inicio" id="data_inicio_hidden" value="{{ data_inicio or '' }}">
                     <input type="hidden" name="data_fim" id="data_fim_hidden" value="{{ data_fim or '' }}">
-                    <div id="data-periodo-popup" class="range-popup" style="display:none;position:absolute;z-index:80;background:#fff;padding:10px;border:1px solid var(--border);box-shadow:0 6px 18px rgba(15,23,42,0.06);border-radius:8px">
-                        <div style="display:flex;gap:8px;align-items:center"><input type="date" id="data-periodo-start"> <span style="font-size:12px;color:var(--muted)">até</span> <input type="date" id="data-periodo-end"></div>
-                        <div id="data-periodo-error" class="range-error" style="display:none;margin-top:8px;color:#b91c1c;font-size:12px"></div>
-                        <div style="display:flex;gap:8px;justify-content:flex-end;margin-top:8px"><button type="button" class="download-btn" id="data-periodo-apply">Aplicar</button><button type="button" id="data-periodo-cancel" style="background:#eee;color:#111;padding:6px 10px;border-radius:8px;border:none">Cancelar</button></div>
+                    <div id="data-periodo-popup" class="range-popup" style="display:none">
+                        <div class="datas"><input type="date" id="data-periodo-start"> <span style="font-size:13px;color:var(--muted)">até</span> <input type="date" id="data-periodo-end"></div>
+                        <div id="data-periodo-error" class="range-error" style="display:none"></div>
+                        <div class="acoes"><button type="button" id="data-periodo-cancel" class="btn-secundario">Cancelar</button><button type="button" class="download-btn" id="data-periodo-apply">Aplicar</button></div>
                     </div>
+                </div>
+
+                <!-- filtros de download: no topo para funcionarem também no celular -->
+                <div class="group">
+                    <label for="status-filter">Status</label>
+                    <select id="status-filter" onchange="setViewStatusAndSubmit(this.value)">
+                        <option value="todos" {% if view_status == 'todos' %}selected{% endif %}>Todos</option>
+                        <option value="baixado_mim" {% if view_status == 'baixado_mim' %}selected{% endif %}>Baixado por mim</option>
+                        <option value="baixado_outro" {% if view_status == 'baixado_outro' %}selected{% endif %}>Baixado por outro</option>
+                        <option value="nao_baixado" {% if view_status == 'nao_baixado' %}selected{% endif %}>Não baixado</option>
+                    </select>
+                </div>
+                <div class="group">
+                    <label for="pessoa-filter">Baixado por</label>
+                    <select id="pessoa-filter" onchange="setBaixadoPorAndSubmit(this.value)">
+                        <option value="" {% if not baixado_por %}selected{% endif %}>Todas as pessoas</option>
+                        {% for p in pessoas_filtro %}
+                        <option value="{{ p['usuario_id'] }}" {% if baixado_por == p['usuario_id'] %}selected{% endif %}>{{ p['nome'] }}</option>
+                        {% endfor %}
+                    </select>
                 </div>
 
                 <!-- ordering is now controlled by clicking the table header -->
@@ -411,73 +424,37 @@ TEMPLATE = r"""<!DOCTYPE html>
                 <!-- filtro por pessoa que baixou (id da conta); vazio = todas -->
                 <input type="hidden" name="baixado_por" id="baixado_por_hidden" value="{{ baixado_por }}">
             </form>
+        </section>
 
-            <div class="title-row">
-                <h1>Documentos assinados</h1>
-                <div style="display:flex;gap:12px;align-items:center">
-                    <div style="color:var(--muted);font-size:13px"><div>Mostrando {{ documentos|length }} documentos</div></div>
+        <section class="resumo" aria-label="Resumo da lista">
+            <div class="card stat"><span class="stat-label">Documentos na lista</span><span id="resumo-lista" class="stat-val count-val">{{ documentos|length }}</span></div>
+            <div class="card stat mim" title="Documentos da lista atual (cofre, nome e período filtrados) que eu baixei"><span class="stat-label">Baixados por mim</span><span id="downloaded-count" class="stat-val count-val">{{ total_mim or 0 }}</span></div>
+            <div class="card stat outros" title="Documentos da lista atual baixados só por outras pessoas"><span class="stat-label">Baixados por outros</span><span id="downloaded-others-count" class="stat-val count-val">{{ total_outros or 0 }}</span></div>
+        </section>
 
-                    <div class="downloaded-counter" id="downloaded-counter" title="Documentos da lista atual (cofre, nome e período filtrados). Por outros: baixados só por outras pessoas">
-                        <span style="font-weight:600">Baixados por mim:</span>
-                        <span id="downloaded-count" class="count-val">{{ total_mim or 0 }}</span>
-                        <span class="sep">·</span>
-                        <span style="font-weight:600">Por outros:</span>
-                        <span id="downloaded-others-count" class="count-val">{{ total_outros or 0 }}</span>
-                    </div>
-                    {% if usuario %}
-                    <div class="usuario-logado" title="{{ usuario.email }}">{{ usuario.nome }} · <a href="/logout">Sair</a></div>
-                    {% endif %}
-                    <button id="dark-mode-toggle" title="Alternar modo noturno" aria-label="Alternar modo noturno">
-                        <span class="toggle-icon toggle-sun" aria-hidden="true"></span>
-                        <span class="toggle-icon toggle-moon" aria-hidden="true"></span>
-                    </button>
-                </div>
-            </div>
-
+        <section class="card tabela" aria-label="Documentos">
             <form method="POST" id="download-form">
                 <div class="table-container {% if documentos|length >= 10 %}scroll-enabled{% endif %}">
                     <table>
                     <thead>
                         <tr>
-                            <th style="width:70px"><div class="master-wrap"><input type="checkbox" id="master-check" title="Selecionar todos"><span id="selected-count">0</span></div></th>
+                            <th style="width:76px"><div class="master-wrap"><input type="checkbox" id="master-check" title="Selecionar todos" aria-label="Selecionar todos"><span id="selected-count">0</span></div></th>
                             <th>Documento</th>
-                            <th style="width:140px" class="sortable {% if ordenar_por in ['data_desc','data_asc'] %}active-sort{% endif %}" id="th-data">Data <span id="sort-arrow-data">{% if ordenar_por=='data_desc' %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% elif ordenar_por=='data_asc' %}<span class="sort-icon">{{ ICON_DOWN|safe }}</span>{% else %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% endif %}</span></th>
-
-                            <th style="width:160px">Cofre</th>
-                            <th style="width:300px">
-                                                <div class="status-header" style="display:flex;align-items:center;gap:8px">
-                                                    <span style="font-weight:600;font-size:13px;white-space:nowrap">Baixado por</span>
-                                                    <select id="pessoa-filter" name="pessoa_filter" onchange="setBaixadoPorAndSubmit(this.value)" style="min-width:120px;max-width:150px;padding:6px;border-radius:6px;border:1px solid var(--border)">
-                                                        <option value="" {% if not baixado_por %}selected{% endif %}>Todas as pessoas</option>
-                                                        {% for p in pessoas_filtro %}
-                                                        <option value="{{ p['usuario_id'] }}" {% if baixado_por == p['usuario_id'] %}selected{% endif %}>{{ p['nome'] }}</option>
-                                                        {% endfor %}
-                                                    </select>
-                                                </div>
-                            </th>
-                            <th style="width:210px">
-                                                <div class="status-header" style="display:flex;align-items:center;gap:8px">
-                                                    <span style="font-weight:600;font-size:13px">Status</span>
-                                                    <select id="status-filter" name="status_filter" onchange="setViewStatusAndSubmit(this.value)" style="min-width:140px;padding:6px;border-radius:6px;border:1px solid var(--border)">
-                                                        <option value="todos" {% if view_status == 'todos' %}selected{% endif %}>Todos</option>
-                                                        <option value="baixado_mim" {% if view_status == 'baixado_mim' %}selected{% endif %}>Baixado por mim</option>
-                                                        <option value="baixado_outro" {% if view_status == 'baixado_outro' %}selected{% endif %}>Baixado por outro</option>
-                                                        <option value="nao_baixado" {% if view_status == 'nao_baixado' %}selected{% endif %}>Não baixado</option>
-                                                    </select>
-                                                </div>
-                            </th>
+                            <th style="width:130px" class="sortable {% if ordenar_por in ['data_desc','data_asc'] %}active-sort{% endif %}" id="th-data">Data <span id="sort-arrow-data">{% if ordenar_por=='data_desc' %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% elif ordenar_por=='data_asc' %}<span class="sort-icon">{{ ICON_DOWN|safe }}</span>{% else %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% endif %}</span></th>
+                            <th style="width:130px">Cofre</th>
+                            <th style="width:380px">Baixado por</th>
+                            <th style="width:205px">Status</th>
                         </tr>
                     </thead>
                     <tbody>
                         {% for doc in documentos %}
                         <tr>
                             <td data-label="Selecionar">
-                                <input type="checkbox" name="documentos" value="{{ doc['uuidDoc'] }}">
+                                <input type="checkbox" name="documentos" value="{{ doc['uuidDoc'] }}" aria-label="Selecionar {{ doc['nomeLimpo'] }}">
                                 <input type="hidden" name="doc_nomes[{{ doc['uuidDoc'] }}]" value="{{ doc['nomeOriginal'] }}">
                             </td>
                             <td class="doc-name">{{ doc['nomeLimpo'] }}</td>
                             <td class="date-col" data-label="Data">{{ doc['dataAssinatura'] }}</td>
-
                             <td data-label="Cofre">{{ doc['cofre_nome'] }}</td>
                             <td data-label="Baixado por" class="baixado-por"><span class="pessoas">{% for p in doc.get('pessoas', []) %}<span class="pessoa-chip{% if p['eu'] %} eu{% endif %}" title="{{ p['email'] or 'e-mail não cadastrado' }}">{{ p['nome'] }}</span>{% endfor %}</span></td>
                             <td data-label="Status">
@@ -491,19 +468,19 @@ TEMPLATE = r"""<!DOCTYPE html>
                                 {% endif %}
                             </td>
                         </tr>
+                        {% else %}
+                        <tr class="linha-vazia"><td colspan="6" class="vazio">Nenhum documento encontrado com esses filtros.</td></tr>
                         {% endfor %}
                     </tbody>
                     </table>
                 </div>
 
-            <div class="download-area">
-                <div style="color:var(--muted);font-size:13px">Selecione documentos para baixar</div>
-            <div style="display:flex;gap:8px">
-                <button name="download" class="download-btn">Download Selecionados</button>
-            </div>
-            </div>
+                <div class="download-area">
+                    <div class="dica">Selecione documentos para baixar</div>
+                    <button name="download" class="download-btn">Baixar selecionados</button>
+                </div>
             </form>
-        </div>
+        </section>
     <!-- icon templates (hidden) - wrapped so injected HTML includes .sort-icon -->
     <template id="icon-up-tpl"><span class="sort-icon">{{ ICON_UP|safe }}</span></template>
     <template id="icon-down-tpl"><span class="sort-icon">{{ ICON_DOWN|safe }}</span></template>
@@ -640,8 +617,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                             if(newTbody && oldTbody) oldTbody.parentNode.replaceChild(newTbody, oldTbody);
                             // update the summary 'Mostrando X documentos'
                             // update only the inner summary div (preserve the dark-mode toggle button)
-                            var newSummary = doc.querySelector('.title-row > div > div');
-                            var oldSummary = document.querySelector('.title-row > div > div');
+                            var newSummary = doc.getElementById('resumo-lista');
+                            var oldSummary = document.getElementById('resumo-lista');
                             if(newSummary && oldSummary) oldSummary.textContent = newSummary.textContent;
                             // update active header class and restore icons
                             if(active === 'ultima'){
@@ -683,8 +660,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                             var oldTbody = document.querySelector('table tbody');
                             if(newTbody && oldTbody) oldTbody.parentNode.replaceChild(newTbody, oldTbody);
                             // update only the inner summary div (preserve the dark-mode toggle button)
-                            var newSummary = doc.querySelector('.title-row > div > div');
-                            var oldSummary = document.querySelector('.title-row > div > div');
+                            var newSummary = doc.getElementById('resumo-lista');
+                            var oldSummary = document.getElementById('resumo-lista');
                             if(newSummary && oldSummary) oldSummary.textContent = newSummary.textContent;
                             // opções do filtro "Baixado por" acompanham a lista (período, cofre, nome)
                             var novoFiltro = doc.getElementById('pessoa-filter'), filtroAtual = document.getElementById('pessoa-filter');
@@ -885,7 +862,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                 // initialize from localStorage or system preference
                 try{
                     var saved = localStorage.getItem('d4sign:dark_mode');
-                    if(saved === 'dark' || (saved !== 'light' && window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches)){
+                    if(saved === 'dark'){
                         applyMode('dark');
                     } else {
                         applyMode('light');
