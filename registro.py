@@ -91,6 +91,43 @@ def baixados(usuario):
     return resultado
 
 
+def baixados_por_documento(desde=None):
+    """Quem baixou cada documento: {uuid_doc: [{'usuario_id', 'nome', 'baixado_em'}, ...]} de todas as pessoas.
+
+    desde (datetime UTC sem fuso) ignora os downloads anteriores a essa data; None traz todos.
+    O nome vem do cadastro (usuarios); sem ele, fica o e-mail ou o id gravado no download.
+    """
+    resultado = {}
+    if _pool:
+        sql = """SELECT d.uuid_doc, d.usuario_id, COALESCE(u.nome, d.usuario_email, d.usuario_id), d.baixado_em
+                 FROM downloads d LEFT JOIN usuarios u ON u.id::text = d.usuario_id"""
+        params = ()
+        if desde:
+            sql += " WHERE d.baixado_em >= %s"
+            params = (desde.replace(tzinfo=timezone.utc),)
+        with _pool.connection() as conn:
+            with conn.cursor() as cur:
+                cur.execute(sql, params)
+                for uuid_doc, usuario_id, nome, dt in cur.fetchall():
+                    resultado.setdefault(uuid_doc, []).append(
+                        {'usuario_id': usuario_id, 'nome': nome, 'baixado_em': dt.astimezone(timezone.utc).replace(tzinfo=None)})
+        return resultado
+    with _trava_arquivo:
+        dados = _ler_arquivo()
+    for usuario_id, pessoa in dados.items():
+        nome = 'Sem login' if usuario_id == USUARIO_COMPARTILHADO['id'] else usuario_id
+        for uuid_doc, iso in pessoa.items():
+            try:
+                dt = datetime.fromisoformat(iso)
+            except (TypeError, ValueError):
+                continue
+            dt = dt.astimezone(timezone.utc).replace(tzinfo=None) if dt.tzinfo else dt
+            if desde and dt < desde:
+                continue
+            resultado.setdefault(uuid_doc, []).append({'usuario_id': usuario_id, 'nome': nome, 'baixado_em': dt})
+    return resultado
+
+
 CAMPOS_USUARIO = ('id', 'nome', 'email', 'senha_hash', 'confirmado_em')
 
 
