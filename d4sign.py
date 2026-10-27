@@ -172,7 +172,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     html{height:100%}
     html,body{margin:0;background:var(--page-bg);font-family:Inter, Arial, Helvetica, sans-serif;color:var(--text-color);transition:background-color .25s ease,color .25s ease}
     body{min-height:100%}
-        .page{max-width:1100px;margin:0 auto;padding:46px 18px}
+        .page{max-width:1400px;margin:0 auto;padding:46px 18px}
     .card{background:var(--card-bg);border-radius:12px;padding:24px;box-shadow:0 6px 18px rgba(15,23,42,0.06);transition:background-color .25s ease,box-shadow .25s ease}
         .controls{display:flex;gap:12px;align-items:center;flex-wrap:wrap;margin-bottom:18px}
         .controls .group{display:flex;flex-direction:column;gap:6px}
@@ -196,7 +196,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     .dark-mode tbody tr:hover td a{
         color: var(--text-color);
     }
-    .doc-name{font-weight:500}
+    .doc-name{font-weight:500;min-width:240px}
     .date-col{text-align:left;color:var(--muted)}
     /* master checkbox / badge */
         .master-wrap{display:flex;align-items:center;gap:10px}
@@ -279,6 +279,7 @@ TEMPLATE = r"""<!DOCTYPE html>
             .download-area .download-btn{width:100%}
             .table-container.scroll-enabled{padding-right:0}
             .remover-baixado{width:24px;height:24px;font-size:17px}
+            .baixado-por .pessoas{justify-content:flex-end}
         }
         /* Scroll container that activates when many documents are shown. */
         .table-container.scroll-enabled{max-height:calc(var(--row-height) * 9);overflow-y:auto;scroll-behavior:smooth;-webkit-overflow-scrolling:touch;padding-right:6px}
@@ -339,6 +340,10 @@ TEMPLATE = r"""<!DOCTYPE html>
 .baixado-badge{display:inline-flex;align-items:center;gap:2px;background:var(--download-badge-bg);color:var(--download-badge-text);padding:3px 4px 3px 8px;border-radius:999px;font-size:12px;white-space:nowrap;cursor:default}
 .baixado-badge.baixado-outro{background:var(--other-badge-bg);color:var(--other-badge-text);padding-right:8px}
 .nao-baixado{font-size:12px;color:var(--muted);white-space:nowrap}
+/* Coluna "Baixado por": um nome ao lado do outro (e-mail ao passar o mouse); o meu em negrito */
+.baixado-por .pessoas{display:inline-flex;flex-wrap:wrap;gap:4px}
+.pessoa-chip{display:inline-block;padding:2px 8px;border-radius:999px;border:1px solid var(--border);background:var(--badge-bg);color:var(--text-color);font-size:12px;white-space:nowrap;cursor:default}
+.pessoa-chip.eu{font-weight:700}
 /* × dentro da tag: tira a marcação de baixado só daquele documento */
 .remover-baixado{display:inline-flex;align-items:center;justify-content:center;width:18px;height:18px;padding:0;border:0;border-radius:50%;background:transparent;color:inherit;font-size:15px;line-height:1;cursor:pointer;opacity:.65}
 .remover-baixado:hover,.remover-baixado:focus-visible{opacity:1;background:rgba(0,0,0,.1)}
@@ -403,6 +408,8 @@ TEMPLATE = r"""<!DOCTYPE html>
                 <input type="hidden" name="ordenar_por" id="ordenar_por" value="{{ ordenar_por or '' }}">
                 <!-- filtro de status de download: todos, baixado_mim, baixado_outro ou nao_baixado (padrão) -->
                 <input type="hidden" name="view_status" id="view_status_hidden" value="{{ view_status }}">
+                <!-- filtro por pessoa que baixou (id da conta); vazio = todas -->
+                <input type="hidden" name="baixado_por" id="baixado_por_hidden" value="{{ baixado_por }}">
             </form>
 
             <div class="title-row">
@@ -437,6 +444,17 @@ TEMPLATE = r"""<!DOCTYPE html>
                             <th style="width:140px" class="sortable {% if ordenar_por in ['data_desc','data_asc'] %}active-sort{% endif %}" id="th-data">Data <span id="sort-arrow-data">{% if ordenar_por=='data_desc' %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% elif ordenar_por=='data_asc' %}<span class="sort-icon">{{ ICON_DOWN|safe }}</span>{% else %}<span class="sort-icon">{{ ICON_UP|safe }}</span>{% endif %}</span></th>
 
                             <th style="width:160px">Cofre</th>
+                            <th style="width:300px">
+                                                <div class="status-header" style="display:flex;align-items:center;gap:8px">
+                                                    <span style="font-weight:600;font-size:13px;white-space:nowrap">Baixado por</span>
+                                                    <select id="pessoa-filter" name="pessoa_filter" onchange="setBaixadoPorAndSubmit(this.value)" style="min-width:120px;max-width:150px;padding:6px;border-radius:6px;border:1px solid var(--border)">
+                                                        <option value="" {% if not baixado_por %}selected{% endif %}>Todas as pessoas</option>
+                                                        {% for p in pessoas_filtro %}
+                                                        <option value="{{ p['usuario_id'] }}" {% if baixado_por == p['usuario_id'] %}selected{% endif %}>{{ p['nome'] }}</option>
+                                                        {% endfor %}
+                                                    </select>
+                                                </div>
+                            </th>
                             <th style="width:210px">
                                                 <div class="status-header" style="display:flex;align-items:center;gap:8px">
                                                     <span style="font-weight:600;font-size:13px">Status</span>
@@ -461,6 +479,7 @@ TEMPLATE = r"""<!DOCTYPE html>
                             <td class="date-col" data-label="Data">{{ doc['dataAssinatura'] }}</td>
 
                             <td data-label="Cofre">{{ doc['cofre_nome'] }}</td>
+                            <td data-label="Baixado por" class="baixado-por"><span class="pessoas">{% for p in doc.get('pessoas', []) %}<span class="pessoa-chip{% if p['eu'] %} eu{% endif %}" title="{{ p['email'] or 'e-mail não cadastrado' }}">{{ p['nome'] }}</span>{% endfor %}</span></td>
                             <td data-label="Status">
                                 {# o servidor só lista documentos Finalizados; aqui aparece o status de download #}
                                 {% if doc.get('status_download') == 'mim' %}
@@ -667,6 +686,9 @@ TEMPLATE = r"""<!DOCTYPE html>
                             var newSummary = doc.querySelector('.title-row > div > div');
                             var oldSummary = document.querySelector('.title-row > div > div');
                             if(newSummary && oldSummary) oldSummary.textContent = newSummary.textContent;
+                            // opções do filtro "Baixado por" acompanham a lista (período, cofre, nome)
+                            var novoFiltro = doc.getElementById('pessoa-filter'), filtroAtual = document.getElementById('pessoa-filter');
+                            if(novoFiltro && filtroAtual){ filtroAtual.innerHTML = novoFiltro.innerHTML; filtroAtual.value = novoFiltro.value; }
                             // contadores "Baixados por mim" e "Por outros" seguem os filtros da lista
                             ['downloaded-count', 'downloaded-others-count'].forEach(function(id){
                                 var novo = doc.getElementById(id), atual = document.getElementById(id);
@@ -890,6 +912,15 @@ TEMPLATE = r"""<!DOCTYPE html>
             var viewStatusHidden = document.getElementById('view_status_hidden');
             // helper exposed for inline onchange to guarantee hidden value is set before submit
             window.setViewStatusAndSubmit = function(v){ try{ var vh = document.getElementById('view_status_hidden'); if(vh) vh.value = v; var f = document.getElementById('filtro-form'); if(f) f.submit(); }catch(e){} };
+            // filtro "Baixado por": ao escolher uma pessoa, o Status vai para "Todos"
+            // (com "Não baixado" a lista ficaria sempre vazia); depois dá para combinar os dois
+            window.setBaixadoPorAndSubmit = function(v){
+                try{
+                    var bh = document.getElementById('baixado_por_hidden'); if(bh) bh.value = v;
+                    var vh = document.getElementById('view_status_hidden'); if(v && vh && vh.value === 'nao_baixado') vh.value = 'todos';
+                    var f = document.getElementById('filtro-form'); if(f) f.submit();
+                }catch(e){}
+            };
             if(statusFilter && viewStatusHidden){
                 // initialize select based on hidden input
                 try{ if(viewStatusHidden.value) statusFilter.value = (viewStatusHidden.value || 'nao_baixado'); }catch(e){}
@@ -1112,6 +1143,7 @@ def marcar_status_download(documentos, desde=None):
 
     status_download: 'mim' (eu baixei, mesmo que outros também), 'outro' (só outras pessoas) ou 'nao'.
     quem_baixou: texto da dica com quem baixou e quando, em ordem alfabética, um por linha.
+    pessoas: quem baixou, em ordem alfabética ({'usuario_id', 'nome', 'email', 'eu'}), para a coluna "Baixado por".
     """
     try:
         por_doc = registro.baixados_por_documento(desde)
@@ -1127,10 +1159,12 @@ def marcar_status_download(documentos, desde=None):
         d['status_download'] = 'mim' if eu else ('outro' if outros else 'nao')
         d['outros_baixaram'] = bool(eu and outros)
         linhas = []
+        d['pessoas'] = []
         for p in sorted(pessoas, key=lambda p: _chave_nome(p['nome'])):
             quando = p['baixado_em'].replace(tzinfo=timezone.utc).astimezone(FUSO_BRASILIA).strftime('%d/%m/%Y')
-            voce = ' (você)' if str(p['usuario_id']) == meu_id else ''
-            linhas.append(f"{p['nome']}{voce} em {quando}")
+            eu_mesmo = str(p['usuario_id']) == meu_id
+            linhas.append(f"{p['nome']}{' (você)' if eu_mesmo else ''} em {quando}")
+            d['pessoas'].append({'usuario_id': str(p['usuario_id']), 'nome': p['nome'], 'email': p.get('email'), 'eu': eu_mesmo})
         d['quem_baixou'] = ('Baixado por:\n' + '\n'.join(linhas)) if linhas else ''
     return documentos
 
@@ -1761,6 +1795,8 @@ def index():
     view_status = {'finalizado': 'todos', 'baixado': 'baixado_mim'}.get(view_status, view_status)
     if view_status not in ('todos', 'baixado_mim', 'baixado_outro', 'nao_baixado'):
         view_status = 'nao_baixado'
+    # filtro por pessoa que baixou (id da conta); vazio = todas as pessoas
+    baixado_por = (request.form.get('baixado_por') or request.args.get('baixado_por') or '').strip()
 
     for d in documentos:
         d["cofre_nome"] = cofre_map.get(d.get("cofre_uuid"), "Desconhecido")
@@ -1861,6 +1897,15 @@ def index():
     # "por outros" = só outras pessoas baixaram (os que eu também baixei ficam de fora)
     total_mim = sum(1 for d in documentos if d['status_download'] == 'mim')
     total_outros = sum(1 for d in documentos if d['status_download'] == 'outro')
+    # opções do filtro "Baixado por": quem baixou algum documento da lista (antes dos filtros de status e pessoa)
+    pessoas_filtro = {}
+    for d in documentos:
+        for p in d['pessoas']:
+            pessoas_filtro.setdefault(p['usuario_id'], p)
+    pessoas_filtro = sorted(pessoas_filtro.values(), key=lambda p: _chave_nome(p['nome']))
+    if baixado_por and not any(p['usuario_id'] == baixado_por for p in pessoas_filtro):
+        # pessoa escolhida sem downloads no período: continua no filtro para dar para trocar
+        pessoas_filtro.append({'usuario_id': baixado_por, 'nome': baixado_por, 'email': None, 'eu': False})
 
     # Apply view filter
     if view_status == 'baixado_mim':
@@ -1869,6 +1914,8 @@ def index():
         documentos = [d for d in documentos if d['status_download'] == 'outro']
     elif view_status == 'nao_baixado':
         documentos = [d for d in documentos if d['status_download'] == 'nao']
+    if baixado_por:
+        documentos = [d for d in documentos if any(p['usuario_id'] == baixado_por for p in d['pessoas'])]
 
     # Limit rendering size
     MAX_RENDER = 2000
@@ -1960,6 +2007,7 @@ def index():
                                   ICON_UP_WRAPPED_JS=json.dumps(ICON_UP_WRAPPED), ICON_DOWN_WRAPPED_JS=json.dumps(ICON_DOWN_WRAPPED),
                                   enable_scroll=enable_scroll,
                                   total_mim=total_mim, total_outros=total_outros,
+                                  baixado_por=baixado_por, pessoas_filtro=pessoas_filtro,
                                   usuario=auth.usuario_atual(), login_ativo=auth.LOGIN_ATIVO,
                                   auto_refresh_last=auto_refresh_last, auto_refresh_next=auto_refresh_next)
 
