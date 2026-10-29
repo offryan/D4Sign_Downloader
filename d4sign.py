@@ -306,7 +306,11 @@ TEMPLATE = r"""<!DOCTYPE html>
             .baixado-por .pessoas{justify-content:flex-end}
             .range-popup{min-width:0;left:0;right:0}
             .range-popup .datas{flex-direction:column;align-items:stretch}
+            .voltar-topo.visivel{display:flex}
         }
+        /* Seta de voltar ao topo: só no celular, depois de rolar a lista; fica acima da barra de download */
+        .voltar-topo{display:none;position:fixed;right:16px;bottom:calc(140px + env(safe-area-inset-bottom));z-index:1500;width:46px;height:46px;align-items:center;justify-content:center;border:0;border-radius:999px;background:var(--accent);color:var(--accent-text);box-shadow:0 4px 14px rgba(0,0,0,.22);cursor:pointer}
+        .voltar-topo:hover{background:var(--accent-hover)}
 
     /* Estilo do modal */
     .modal{display:none;position:fixed;z-index:2000;left:0;top:0;width:100%;height:100%;background:rgba(27,27,26,.6)}
@@ -1053,6 +1057,30 @@ TEMPLATE = r"""<!DOCTYPE html>
                 }
             })();
 })();
+    </script>
+    <button type="button" class="voltar-topo" id="voltar-topo" title="Voltar ao topo" aria-label="Voltar ao topo">
+        <svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 19V5M5.5 11.5 12 5l6.5 6.5"/></svg>
+    </button>
+    <script>
+    // Seta de voltar ao topo: aparece depois de rolar a página ou a lista (o CSS só a mostra no celular).
+    // A lista tem rolagem própria e é trocada quando os filtros mudam, por isso ela é buscada a cada vez.
+    (function(){
+        var seta = document.getElementById('voltar-topo');
+        if(!seta) return;
+        function listas(){ return document.querySelectorAll('.table-container'); }
+        function atualizar(){
+            var rolou = window.scrollY > 400;
+            listas().forEach(function(l){ if(l.scrollTop > 400) rolou = true; });
+            seta.classList.toggle('visivel', rolou);
+        }
+        // scroll não sobe pelo documento; na fase de captura dá para ouvir a rolagem da página e da lista
+        document.addEventListener('scroll', atualizar, {passive: true, capture: true});
+        seta.addEventListener('click', function(){
+            listas().forEach(function(l){ l.scrollTo({top: 0, behavior: 'smooth'}); });
+            window.scrollTo({top: 0, behavior: 'smooth'});
+        });
+        atualizar();
+    })();
     </script>
 </body>
 </html>"""
