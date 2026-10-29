@@ -238,6 +238,7 @@ TELA_ACESSO = """<!DOCTYPE html>
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
+<link rel="icon" href="/static/logo.svg" type="image/svg+xml">
 <title>{{ {'login': 'Entrar', 'cadastro': 'Criar conta'}.get(modo, 'Confirme seu e-mail') }} · D4Sign Downloader</title>
 <style>
   /* mesma identidade visual da página principal (Tema Sitawi): creme, grafite e azul #276DBD */
@@ -249,6 +250,7 @@ TELA_ACESSO = """<!DOCTYPE html>
   html,body{margin:0;background:var(--page-bg);color:var(--text-color);font-family:"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif}
   body{min-height:100%;display:flex;flex-direction:column}
   .topbar{background:var(--topbar-bg);color:var(--topbar-text);padding:14px 28px;display:flex;align-items:baseline;gap:14px}
+  .logo-app{display:block;flex:none;align-self:center;width:34px;height:34px}
   .wordmark{font-weight:700;font-size:30px;letter-spacing:-.04em;line-height:1}
   .app-nome{font-size:15px;font-weight:600;opacity:.9}
   .conteudo{flex:1;display:flex;align-items:center;justify-content:center;padding:32px 16px}
@@ -268,7 +270,7 @@ TELA_ACESSO = """<!DOCTYPE html>
   button.secundario:hover{border-color:var(--muted)}
   .troca{margin:20px 0 0;text-align:center;font-size:14px;color:var(--muted)}
   .troca a{color:var(--accent);font-weight:600}
-  @media (max-width:480px){.card{padding:24px}.topbar{padding:12px 16px}.wordmark{font-size:26px}}
+  @media (max-width:480px){.card{padding:24px}.topbar{padding:12px 16px}.wordmark{font-size:26px}.logo-app{width:30px;height:30px}}
 </style>
 <script>
   // mesmo tema escolhido na página principal (abre no claro; escuro só se a pessoa escolheu)
@@ -277,7 +279,7 @@ TELA_ACESSO = """<!DOCTYPE html>
 </head>
 <body>
 <script>if(document.documentElement.classList.contains('tema-escuro')) document.body.classList.add('dark-mode');</script>
-<header class="topbar"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></header>
+<header class="topbar"><img class="logo-app" src="/static/logo.svg" alt="" width="34" height="34"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></header>
 <div class="conteudo">
 <main class="card">
   {% if modo == 'login' %}
