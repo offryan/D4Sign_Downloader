@@ -7,9 +7,10 @@ Improvements made:
 - Log timing for index page generation
 """
 
-from flask import Flask, render_template, render_template_string, request, send_file, jsonify
+from flask import Flask, Response, render_template, render_template_string, request, jsonify
 import requests
-import io
+import itertools
+import uuid
 import zipfile
 import re
 import base64
@@ -22,6 +23,7 @@ from functools import wraps
 import json
 import threading
 import traceback
+from collections import deque
 from concurrent.futures import ThreadPoolExecutor
 from requests.adapters import HTTPAdapter
 from urllib3.util.retry import Retry
@@ -979,10 +981,18 @@ TEMPLATE = r"""<!DOCTYPE html>
                                 var ct = (resp.headers.get('Content-Type') || '');
                                 // If server returned a zip, treat as file; otherwise assume HTML and replace page
                                 if(ct.indexOf('application/zip') !== -1 || ct.indexOf('application/octet-stream') !== -1){
-                                    // capture zip-count header if present, then handle blob
-                                    var zipCountHeader = resp.headers.get('X-Zip-Count');
-                                    var falhasHeader = parseInt(resp.headers.get('X-Zip-Falhas'), 10) || 0;
+                                    // o zip chega em pedaços; quantos arquivos entraram e quantos falharam vem de /lote/<id> no fim
+                                    var loteId = resp.headers.get('X-Lote');
                                     return resp.blob().then(function(blob){
+                                        if(!loteId) return { blob: blob, lote: null };
+                                        return fetch('/lote/' + encodeURIComponent(loteId))
+                                            .then(function(r){ return r.ok ? r.json() : null; })
+                                            .catch(function(){ return null; })
+                                            .then(function(lote){ return { blob: blob, lote: lote }; });
+                                    }).then(function(res){
+                                        var blob = res.blob;
+                                        var zipCountHeader = res.lote ? String(res.lote.arquivos) : null;
+                                        var falhasHeader = res.lote ? (res.lote.falhas || 0) : 0;
                                         // try to extract filename from Content-Disposition
                                         var cd = resp.headers.get('Content-Disposition') || '';
                                         var filename = 'documentos_assinados.zip';
@@ -1086,11 +1096,6 @@ def _save_assinaturas(data):
             json.dump(data, f, ensure_ascii=False, indent=2)
     except Exception:
         logger.exception('Erro salvando assinaturas.json')
-
-
-def record_downloads(uuids):
-    """Registra os documentos como baixados pela pessoa logada."""
-    registro.registrar(auth.usuario_atual(), uuids)
 
 
 def get_downloaded_meta():
@@ -1757,6 +1762,105 @@ def register_dates():
         return jsonify({'ok': False, 'error': 'internal error'}), 500
 
 
+class _SaidaDoZip:
+    """Destino onde o zipfile escreve: guarda só o pedaço do zip que ainda não foi enviado ao navegador.
+
+    Sem seek(), o zipfile entende que a saída não volta atrás e grava o zip em sequência.
+    """
+
+    def __init__(self):
+        self._pendente = bytearray()
+        self._posicao = 0
+
+    def write(self, dados):
+        self._pendente += dados
+        self._posicao += len(dados)
+        return len(dados)
+
+    def tell(self):
+        return self._posicao
+
+    def flush(self):
+        pass
+
+    def retirar(self):
+        dados = bytes(self._pendente)
+        self._pendente.clear()
+        return dados
+
+
+def _baixar_em_ordem(pool, uuids):
+    """Baixa os documentos em paralelo e devolve (uuid, conteúdo) na ordem da seleção.
+
+    Só pede à D4Sign alguns documentos à frente do que já foi enviado, para o servidor nunca
+    segurar mais que esses poucos PDFs na memória, seja qual for o tamanho do lote.
+    """
+    restantes = iter(uuids)
+    pendentes = deque((u, pool.submit(baixar_documento, u)) for u in itertools.islice(restantes, DOWNLOAD_WORKERS * 2))
+    while pendentes:
+        uuid_doc, futuro = pendentes.popleft()
+        proximo = next(restantes, None)
+        if proximo is not None:
+            pendentes.append((proximo, pool.submit(baixar_documento, proximo)))
+        yield uuid_doc, futuro.result()
+
+
+# Resultado de cada lote ({id: {'arquivos', 'falhas'}}), lido uma vez pela página depois do download
+LOTES = {}
+MAX_LOTES_GUARDADOS = 50
+
+
+def _gerar_zip_lote(lote_id, selecionados, nomes, usuario):
+    """Gera o zip em pedaços: cada PDF vai para o navegador assim que chega da D4Sign."""
+    inicio = time.time()
+    saida = _SaidaDoZip()
+    baixados = []
+    falhas = 0
+    used = set()
+    counts = {}
+    pool = ThreadPoolExecutor(max_workers=min(DOWNLOAD_WORKERS, len(selecionados)))
+    try:
+        with zipfile.ZipFile(saida, "w", zipfile.ZIP_STORED) as zf:
+            for uuid_doc, content in _baixar_em_ordem(pool, selecionados):
+                if not content:
+                    falhas += 1
+                    continue
+                safe_name = re.sub(r'[<>:"/\\|?*]', "_", nomes[uuid_doc]).strip()
+                if not os.path.splitext(safe_name)[1]:
+                    safe_name += ".pdf"
+                base, ext = os.path.splitext(safe_name)
+                candidate = safe_name
+                if candidate in used:
+                    n = counts.get(base, 1)
+                    candidate = f"{base} ({n}){ext}"
+                    counts[base] = n + 1
+                used.add(candidate)
+                zf.writestr(candidate, content)
+                baixados.append(uuid_doc)
+                yield saida.retirar()
+            # registra antes de fechar o zip: quando o navegador recebe o último pedaço, o resultado já está pronto.
+            # Se a pessoa cancelar o download no meio, nada é registrado.
+            try:
+                registro.registrar(usuario, baixados)
+            except Exception:
+                logger.exception('Erro ao registrar downloads')
+            while len(LOTES) >= MAX_LOTES_GUARDADOS:
+                LOTES.pop(next(iter(LOTES)))
+            LOTES[lote_id] = {'arquivos': len(baixados), 'falhas': falhas}
+        yield saida.retirar()  # índice do zip, escrito ao fechar o arquivo
+        logger.info(f'Lote: {len(baixados)} baixados, {falhas} falhas em {time.time() - inicio:.1f}s ({DOWNLOAD_WORKERS} em paralelo)')
+    finally:
+        pool.shutdown(wait=False, cancel_futures=True)
+
+
+@app.route('/lote/<lote_id>')
+def resultado_lote(lote_id):
+    resultado = LOTES.pop(lote_id, None)
+    if resultado is None:
+        return jsonify({'ok': False, 'error': 'lote não encontrado'}), 404
+    return jsonify({'ok': True, **resultado})
+
+
 @app.route("/", methods=["GET", "POST"])
 def index():
     t0 = time.time()
@@ -1907,46 +2011,13 @@ def index():
     if request.method == "POST" and "download" in request.form:
         selecionados = request.form.getlist("documentos")
         if selecionados:
-            mem = io.BytesIO()
-            inicio = time.time()
-            # baixa vários documentos ao mesmo tempo (antes era um de cada vez); map mantém a ordem
-            with ThreadPoolExecutor(max_workers=min(DOWNLOAD_WORKERS, len(selecionados))) as pool:
-                conteudos = list(pool.map(baixar_documento, selecionados))
-            falhas = [u for u, c in zip(selecionados, conteudos) if not c]
-            baixados = []
-            with zipfile.ZipFile(mem, "w", zipfile.ZIP_STORED) as zf:
-                used = set()
-                counts = {}
-                for uuid_doc, content in zip(selecionados, conteudos):
-                    if not content:
-                        continue
-                    nome_original = request.form.get(f"doc_nomes[{uuid_doc}]") or f"{uuid_doc}.pdf"
-                    safe_name = re.sub(r'[<>:"/\\|?*]', "_", nome_original).strip()
-                    if not os.path.splitext(safe_name)[1]:
-                        safe_name += ".pdf"
-                    base, ext = os.path.splitext(safe_name)
-                    candidate = safe_name
-                    if candidate in used:
-                        n = counts.get(base, 1)
-                        candidate = f"{base} ({n}){ext}"
-                        counts[base] = n + 1
-                    used.add(candidate)
-                    zf.writestr(candidate, content)
-                    baixados.append(uuid_doc)
-            try:
-                record_downloads(baixados)
-            except Exception:
-                logger.exception('Erro ao registrar downloads')
-            logger.info(f'Lote: {len(baixados)} baixados, {len(falhas)} falhas em {time.time() - inicio:.1f}s ({DOWNLOAD_WORKERS} em paralelo)')
-            mem.seek(0)
-            # return a response with a header indicating how many files are inside the zip
-            resp = send_file(mem, as_attachment=True, download_name="documentos_assinados.zip", mimetype="application/zip")
-            try:
-                resp.headers['X-Zip-Count'] = str(len(used))
-                resp.headers['X-Zip-Falhas'] = str(len(falhas))
-                # os contadores são atualizados pela página ao recarregar a lista depois do download
-            except Exception:
-                pass
+            # o zip é montado e enviado aos poucos, sem guardar o lote no servidor; quantos arquivos
+            # entraram e quantos falharam a página consulta em /lote/<id> depois que o download termina
+            lote_id = uuid.uuid4().hex
+            nomes = {u: request.form.get(f"doc_nomes[{u}]") or f"{u}.pdf" for u in selecionados}
+            resp = Response(_gerar_zip_lote(lote_id, selecionados, nomes, auth.usuario_atual()), mimetype="application/zip")
+            resp.headers['Content-Disposition'] = 'attachment; filename="documentos_assinados.zip"'
+            resp.headers['X-Lote'] = lote_id
             return resp
 
     # persistence of ultimaAssinatura removed (column no longer shown)
