@@ -1,0 +1,9 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" role="img" aria-label="D4Sign Downloader">
+  <!-- Logo do D4Sign Downloader: documento com seta de download e selo de assinado, nas cores da Sitawi -->
+  <rect width="32" height="32" rx="8" fill="#E8E8DC"/>
+  <path d="M10 5.5h8.5l5.5 5.5v13.5a2 2 0 0 1-2 2H10a2 2 0 0 1-2-2v-17a2 2 0 0 1 2-2z" fill="#276DBD"/>
+  <path d="M18.5 5.5v3.5a2 2 0 0 0 2 2H24z" fill="#1F5A9E"/>
+  <path d="M16 12.5v8M12.8 17.4 16 20.6l3.2-3.2" stroke="#E8E8DC" stroke-width="2.2" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+  <circle cx="24" cy="24.5" r="5.6" fill="#008F42" stroke="#E8E8DC" stroke-width="1.8"/>
+  <path d="M21.6 24.6l1.7 1.7 3.2-3.3" stroke="#FFFFFF" stroke-width="1.8" fill="none" stroke-linecap="round" stroke-linejoin="round"/>
+</svg>
