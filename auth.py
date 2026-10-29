@@ -254,6 +254,9 @@ TELA_ACESSO = """<!DOCTYPE html>
   .wordmark{font-weight:700;font-size:30px;letter-spacing:-.04em;line-height:1}
   .app-nome{font-size:15px;font-weight:600;opacity:.9}
   .conteudo{flex:1;display:flex;align-items:center;justify-content:center;padding:32px 16px}
+  .creditos{padding:0 16px 20px;text-align:center;font-size:12px;color:var(--muted);opacity:.7}
+  .creditos a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+  .creditos a:hover{color:var(--text-color)}
   .card{width:100%;max-width:420px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:32px;box-shadow:0 1px 2px rgba(40,40,40,.04), 0 6px 20px rgba(40,40,40,.06)}
   h1{margin:0 0 6px;font-size:26px;letter-spacing:-0.02em}
   .sub{margin:0 0 24px;color:var(--muted);font-size:15px}
@@ -319,6 +322,7 @@ TELA_ACESSO = """<!DOCTYPE html>
   {% endif %}
 </main>
 </div>
+<footer class="creditos">Criado por <a href="https://github.com/offryan" target="_blank" rel="noopener">Ryan G. Santos</a></footer>
 </body>
 </html>"""
 
