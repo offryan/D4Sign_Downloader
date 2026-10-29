@@ -101,6 +101,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <meta charset="utf-8">
     <title>Documentos Assinados</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
+    <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
     <style>
         /* Identidade visual Sitawi (Tema Sitawi do Power BI): creme #E8E8DC, grafite #282828,
            azul #276DBD (cor principal), verde #008F42, amarelo #D9D30E, laranja #E45300; fonte Segoe UI */
@@ -181,6 +182,7 @@ TEMPLATE = r"""<!DOCTYPE html>
         .topbar{background:var(--topbar-bg);color:var(--topbar-text)}
         .topbar-inner{max-width:1400px;margin:0 auto;padding:14px 28px;display:flex;align-items:center;justify-content:space-between;gap:16px}
         .marca{display:flex;align-items:baseline;gap:14px;min-width:0}
+        .logo-app{display:block;flex:none;align-self:center;width:34px;height:34px}
         .wordmark{font-family:"Segoe UI", system-ui, sans-serif;font-weight:700;font-size:30px;letter-spacing:-.04em;line-height:1;color:var(--topbar-text)}
         .app-nome{font-size:15px;font-weight:600;opacity:.9;white-space:nowrap}
         .topbar-acoes{display:flex;align-items:center;gap:14px}
@@ -278,6 +280,7 @@ TEMPLATE = r"""<!DOCTYPE html>
         @media (max-width:720px){
             .topbar-inner{padding:12px 16px}
             .wordmark{font-size:26px}
+            .logo-app{width:30px;height:30px}
             .app-nome{display:none}
             .page{padding:20px 14px 32px;gap:18px}
             .page-head h1{font-size:24px}
@@ -346,7 +349,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <body>
     <header class="topbar">
         <div class="topbar-inner">
-            <div class="marca"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></div>
+            <div class="marca"><img class="logo-app" src="/static/logo.svg" alt="" width="34" height="34"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></div>
             <div class="topbar-acoes">
                 {% if usuario %}
                 <div class="usuario-logado" title="{{ usuario.email }}">{{ usuario.nome }} · <a href="/logout">Sair</a></div>
