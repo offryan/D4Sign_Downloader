@@ -7,7 +7,7 @@ Improvements made:
 - Log timing for index page generation
 """
 
-from flask import Flask, Response, render_template, render_template_string, request, jsonify
+from flask import Flask, Response, redirect, render_template, render_template_string, request, jsonify
 import requests
 import itertools
 import uuid
@@ -99,7 +99,7 @@ TEMPLATE = r"""<!DOCTYPE html>
 <html lang="pt-BR">
 <head>
     <meta charset="utf-8">
-    <title>Documentos Assinados</title>
+    <title>D4Sign Downloader</title>
     <meta name="viewport" content="width=device-width,initial-scale=1">
     <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
     <style>
@@ -1882,6 +1882,12 @@ def _gerar_zip_lote(lote_id, selecionados, nomes, usuario):
         logger.info(f'Lote: {len(baixados)} baixados, {falhas} falhas em {time.time() - inicio:.1f}s ({DOWNLOAD_WORKERS} em paralelo)')
     finally:
         pool.shutdown(wait=False, cancel_futures=True)
+
+
+@app.route('/favicon.ico')
+def favicon():
+    # alguns navegadores pedem /favicon.ico antes de ler o <link rel="icon"> da página
+    return redirect('/static/logo.svg', code=301)
 
 
 @app.route('/lote/<lote_id>')
