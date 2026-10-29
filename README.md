@@ -45,6 +45,7 @@ App em Flask para a equipe da Sitawi Finanças do Bem encontrar e baixar os docu
 
 ### Visual
 - Identidade visual da Sitawi (cores do Tema Sitawi, azul `#276DBD` como cor principal, fonte Segoe UI), também nas telas de login e no e-mail de confirmação
+- Logo próprio do app (`static/logo.svg`): um documento com seta de download e selo verde de assinado. Aparece no topo, ao lado da marca da Sitawi, e como ícone da aba do navegador
 - Abre no tema claro; o tema escuro fica a um clique, e o navegador lembra a escolha
 - No celular, cada documento vira um cartão e o botão de download fica fixo na parte de baixo da tela
 
