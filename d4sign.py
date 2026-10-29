@@ -308,6 +308,10 @@ TEMPLATE = r"""<!DOCTYPE html>
             .range-popup .datas{flex-direction:column;align-items:stretch}
             .voltar-topo.visivel{display:flex}
         }
+        /* Rodapé com os créditos: pequeno e apagado, só uma menção */
+        .creditos{max-width:1400px;margin:0 auto;padding:0 28px 24px;text-align:center;font-size:12px;color:var(--muted);opacity:.7}
+        .creditos a{color:inherit;text-decoration:underline;text-underline-offset:2px}
+        .creditos a:hover{color:var(--text-color)}
         /* Seta de voltar ao topo: só no celular, depois de rolar a lista; fica acima da barra de download */
         .voltar-topo{display:none;position:fixed;right:16px;bottom:calc(140px + env(safe-area-inset-bottom));z-index:1500;width:46px;height:46px;align-items:center;justify-content:center;border:0;border-radius:999px;background:var(--accent);color:var(--accent-text);box-shadow:0 4px 14px rgba(0,0,0,.22);cursor:pointer}
         .voltar-topo:hover{background:var(--accent-hover)}
@@ -498,6 +502,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <template id="icon-sun-tpl"><span class="sort-icon">{{ ICON_SUN|safe }}</span></template>
     <template id="icon-moon-tpl"><span class="sort-icon">{{ ICON_MOON|safe }}</span></template>
     </div>
+    <footer class="creditos">Criado por <a href="https://github.com/offryan" target="_blank" rel="noopener">Ryan G. Santos</a></footer>
 
         <div id="downloadModal" class="modal">
         <div class="modal-content">
