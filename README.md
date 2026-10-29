@@ -46,7 +46,7 @@ Flask app for the Sitawi team to find and download signed documents from D4Sign.
 - Optional Redis cache for signature dates, plus a background refresh worker
 - Webhook endpoint (`POST /webhook/d4sign`) to receive signature updates from D4Sign
 
-**Stack:** Python, Flask, Requests, D4Sign REST API, PostgreSQL / Supabase (psycopg), Brevo (transactional e-mail), Redis (optional). Deployed on Render.
+**Stack:** Python, Flask, Requests, D4Sign REST API, PostgreSQL / Supabase (psycopg), Brevo (transactional e-mail), Redis (optional). Deployed on Vercel (Render also supported).
 
 ## How login works
 
@@ -102,6 +102,17 @@ python d4sign.py
 ```
 
 Then open `http://localhost:5000`.
+
+## Deploy to Vercel
+
+1. On vercel.com, *Add New → Project* and import this GitHub repository. Vercel detects Flask and loads `app` from `d4sign.py` (set in `pyproject.toml`); `vercel.json` runs the function in São Paulo (`gru1`) with up to 300 s per request.
+2. In *Settings → Environment Variables*, set the same variables listed for Render below, except `PORT`. Notes for Vercel:
+   - `SECRET_KEY` is required: without it each function instance signs sessions with a different key and people get logged out.
+   - `DATABASE_URL`: use Supabase's *Transaction pooler* (port 6543), the one meant for serverless functions.
+   - `APP_URL` is optional: without it the confirmation e-mails use the production domain Vercel provides.
+3. Deploy. Each push to `main` deploys to production; other branches get preview URLs.
+
+On Vercel there are no background threads: the Redis refresh worker only runs on Render or locally. Batch downloads are sent as a streamed response, because a regular Vercel Function response is limited to 4.5 MB.
 
 ## Deploy to Render
 

@@ -7,7 +7,7 @@ Improvements made:
 - Log timing for index page generation
 """
 
-from flask import Flask, render_template, render_template_string, request, send_file, jsonify
+from flask import Flask, Response, render_template, render_template_string, request, jsonify
 import requests
 import io
 import zipfile
@@ -43,7 +43,7 @@ from werkzeug.middleware.proxy_fix import ProxyFix
 import auth
 import registro
 
-# O Render termina o HTTPS no proxy: sem isso as URLs de retorno do login sairiam com http://
+# O Render e o Vercel terminam o HTTPS no proxy: sem isso as URLs de retorno do login sairiam com http://
 app.wsgi_app = ProxyFix(app.wsgi_app, x_proto=1, x_host=1)
 auth.configurar(app)
 
@@ -1252,8 +1252,9 @@ def _background_worker_loop():
             logger.error('Background worker loop error:\n%s', traceback.format_exc())
 
 
-# If Redis is available, start a background worker thread to process the refresh queue
-if redis_client:
+# If Redis is available, start a background worker thread to process the refresh queue.
+# No Vercel a função congela entre requisições, então não há onde rodar uma thread de fundo.
+if redis_client and not os.environ.get('VERCEL'):
     t = threading.Thread(target=_background_worker_loop, daemon=True)
     t.start()
 else:
@@ -1938,15 +1939,18 @@ def index():
             except Exception:
                 logger.exception('Erro ao registrar downloads')
             logger.info(f'Lote: {len(baixados)} baixados, {len(falhas)} falhas em {time.time() - inicio:.1f}s ({DOWNLOAD_WORKERS} em paralelo)')
-            mem.seek(0)
+            # Envia o zip em pedaços (streaming): no Vercel uma resposta comum passa de 4,5 MB e é
+            # recusada (FUNCTION_PAYLOAD_TOO_LARGE); respostas em streaming não têm esse limite
+            def _em_pedacos(dados, tamanho=1024 * 1024):
+                for i in range(0, len(dados), tamanho):
+                    yield dados[i:i + tamanho]
+
             # return a response with a header indicating how many files are inside the zip
-            resp = send_file(mem, as_attachment=True, download_name="documentos_assinados.zip", mimetype="application/zip")
-            try:
-                resp.headers['X-Zip-Count'] = str(len(used))
-                resp.headers['X-Zip-Falhas'] = str(len(falhas))
-                # os contadores são atualizados pela página ao recarregar a lista depois do download
-            except Exception:
-                pass
+            resp = Response(_em_pedacos(mem.getvalue()), mimetype="application/zip")
+            resp.headers['Content-Disposition'] = 'attachment; filename="documentos_assinados.zip"'
+            resp.headers['X-Zip-Count'] = str(len(used))
+            resp.headers['X-Zip-Falhas'] = str(len(falhas))
+            # os contadores são atualizados pela página ao recarregar a lista depois do download
             return resp
 
     # persistence of ultimaAssinatura removed (column no longer shown)

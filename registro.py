@@ -2,7 +2,7 @@
 
 Com DATABASE_URL configurada, grava no PostgreSQL (Supabase) e o histórico sobrevive a
 reinícios e novos deploys. Sem ela, usa o arquivo downloads.json (útil só em desenvolvimento:
-no Render o disco é apagado a cada reinício).
+no Render o disco é apagado a cada reinício e no Vercel ele é somente leitura).
 
 Cada registro guarda apenas quem baixou, o identificador do documento na D4Sign e quando.
 As contas de login (usuarios) só existem com o banco configurado.

@@ -1,0 +1,10 @@
+{
+  "$schema": "https://openapi.vercel.sh/vercel.json",
+  "regions": ["gru1"],
+  "functions": {
+    "d4sign.py": {
+      "maxDuration": 300,
+      "excludeFiles": "{docs/**,installed_packages.txt,package-lock.json}"
+    }
+  }
+}

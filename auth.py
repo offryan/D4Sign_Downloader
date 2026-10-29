@@ -33,8 +33,11 @@ LOGIN_ATIVO = registro.usando_banco()
 ROTAS_PUBLICAS = {'login', 'cadastro', 'confirmar', 'reenviar_confirmacao', 'logout', 'webhook_d4sign', 'static'}
 
 VALIDADE_LINK = 24 * 60 * 60
-# Endereço público do site para montar o link do e-mail (o Render preenche RENDER_EXTERNAL_URL sozinho)
-URL_DO_SITE = (os.environ.get('APP_URL') or os.environ.get('RENDER_EXTERNAL_URL') or '').strip().rstrip('/')
+# Endereço público do site para montar o link do e-mail. O Render preenche RENDER_EXTERNAL_URL sozinho;
+# o Vercel preenche VERCEL_PROJECT_PRODUCTION_URL, mas sem o https://
+_URL_VERCEL = os.environ.get('VERCEL_PROJECT_PRODUCTION_URL', '').strip()
+URL_DO_SITE = (os.environ.get('APP_URL') or os.environ.get('RENDER_EXTERNAL_URL')
+               or (f'https://{_URL_VERCEL}' if _URL_VERCEL else '')).strip().rstrip('/')
 # Limite de e-mails de confirmação por endereço: 1 por minuto e 5 por hora
 _envios = {}
 _trava_envios = threading.Lock()
@@ -117,8 +120,8 @@ def _destino_seguro(destino):
 def configurar(app):
     app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
     app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
-                      # no Render (HTTPS) o cookie de sessão só trafega por conexão segura
-                      SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER')),
+                      # no Render e no Vercel (HTTPS) o cookie de sessão só trafega por conexão segura
+                      SESSION_COOKIE_SECURE=bool(os.environ.get('RENDER') or os.environ.get('VERCEL')),
                       PERMANENT_SESSION_LIFETIME=60 * 60 * 12)
 
     if not LOGIN_ATIVO:

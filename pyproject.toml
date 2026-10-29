@@ -1,0 +1,17 @@
+[project]
+name = "d4sign-downloader"
+version = "1.0.0"
+requires-python = ">=3.12"
+dependencies = [
+    "Flask>=2.0",
+    "requests>=2.25",
+    "python-dotenv>=0.21",
+    "redis>=4.0",
+    # "msal>=1.28",  # login Microsoft (desativado, ver auth.py)
+    "psycopg[binary]>=3.1",
+    "psycopg-pool>=3.2",
+]
+
+# No Vercel o app vira uma Vercel Function: ele carrega o `app` do d4sign.py
+[tool.vercel]
+entrypoint = "d4sign:app"
