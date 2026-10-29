@@ -30,7 +30,7 @@ SENHA_MINIMA = 8
 LOGIN_ATIVO = registro.usando_banco()
 
 # Rotas que funcionam sem login: as telas de acesso e o webhook chamado pela D4Sign
-ROTAS_PUBLICAS = {'login', 'cadastro', 'confirmar', 'reenviar_confirmacao', 'logout', 'webhook_d4sign', 'static'}
+ROTAS_PUBLICAS = {'login', 'cadastro', 'confirmar', 'reenviar_confirmacao', 'logout', 'webhook_d4sign', 'static', 'favicon'}
 
 VALIDADE_LINK = 24 * 60 * 60
 # Endereço público do site para montar o link do e-mail (o Render preenche RENDER_EXTERNAL_URL sozinho)
