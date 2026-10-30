@@ -5,8 +5,11 @@ domínio DOMINIO_PERMITIDO (padrão: sitawi.net) conseguem se cadastrar, e a con
 que a pessoa abre o link de confirmação enviado para o e-mail (ver email_envio.py). Fica ativo
 quando DATABASE_URL está configurada; sem banco o app funciona sem login, como antes.
 
-Mais pra frente: login com conta Microsoft (Entra ID). O código está comentado no fim deste
-arquivo, esperando a liberação do T.I.
+Login com conta Microsoft (Entra ID): liga sozinho quando MS_CLIENT_ID, MS_TENANT_ID e
+MS_CLIENT_SECRET estão configuradas (além do DATABASE_URL). Aí a tela de login mostra só o botão
+"Entrar com a conta Microsoft" e o cadastro com senha sai do ar. A pessoa continua sendo a mesma
+linha de usuarios, achada pelo e-mail, então o histórico de downloads de quem já usava o app segue
+ligado à conta. Sem as três variáveis, vale o login com e-mail e senha.
 """
 import hashlib
 import logging
@@ -29,8 +32,18 @@ DOMINIO_PERMITIDO = os.environ.get('DOMINIO_PERMITIDO', 'sitawi.net').strip().lo
 SENHA_MINIMA = 8
 LOGIN_ATIVO = registro.usando_banco()
 
+# Login Microsoft (Entra ID, app single-tenant com redirect URI <site>/auth/callback)
+MS_CLIENT_ID = os.environ.get('MS_CLIENT_ID', '').strip()
+MS_TENANT_ID = os.environ.get('MS_TENANT_ID', '').strip()
+MS_CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '').strip()
+MS_REDIRECT_URI = os.environ.get('MS_REDIRECT_URI', '').strip()  # opcional; padrão: <site>/auth/callback
+MS_ATIVO = LOGIN_ATIVO and bool(MS_CLIENT_ID and MS_TENANT_ID and MS_CLIENT_SECRET)
+if MS_ATIVO:
+    import msal
+
 # Rotas que funcionam sem login: as telas de acesso e o webhook chamado pela D4Sign
-ROTAS_PUBLICAS = {'login', 'cadastro', 'confirmar', 'reenviar_confirmacao', 'logout', 'webhook_d4sign', 'static', 'favicon'}
+ROTAS_PUBLICAS = {'login', 'login_microsoft', 'auth_callback', 'cadastro', 'confirmar', 'reenviar_confirmacao',
+                  'logout', 'webhook_d4sign', 'static', 'favicon'}
 
 VALIDADE_LINK = 24 * 60 * 60
 # Endereço público do site para montar o link do e-mail (o Render preenche RENDER_EXTERNAL_URL sozinho)
@@ -114,6 +127,11 @@ def _destino_seguro(destino):
     return destino if destino and destino.startswith('/') and not destino.startswith('//') else '/'
 
 
+def _cliente_microsoft():
+    return msal.ConfidentialClientApplication(MS_CLIENT_ID, client_credential=MS_CLIENT_SECRET,
+                                              authority=f'https://login.microsoftonline.com/{MS_TENANT_ID}')
+
+
 def configurar(app):
     app.secret_key = os.environ.get('SECRET_KEY') or secrets.token_hex(32)
     app.config.update(SESSION_COOKIE_HTTPONLY=True, SESSION_COOKIE_SAMESITE='Lax',
@@ -125,6 +143,11 @@ def configurar(app):
         logger.warning('Login desligado: configure DATABASE_URL para guardar as contas no Supabase.')
     elif not os.environ.get('SECRET_KEY'):
         logger.warning('SECRET_KEY não configurada: as sessões caem a cada reinício do servidor.')
+    if LOGIN_ATIVO and not MS_ATIVO and (MS_CLIENT_ID or MS_TENANT_ID or MS_CLIENT_SECRET):
+        logger.warning('Login Microsoft desligado: faltam variáveis (MS_CLIENT_ID, MS_TENANT_ID e MS_CLIENT_SECRET). '
+                       'Valendo o login com e-mail e senha.')
+    elif MS_ATIVO:
+        logger.info('Login com conta Microsoft ativo.')
 
     @app.before_request
     def exigir_login():
@@ -141,7 +164,9 @@ def configurar(app):
             return redirect('/')
         if request.method == 'GET':
             session['depois_do_login'] = _destino_seguro(request.args.get('next'))
-            return _tela('login')
+            return _tela('microsoft' if MS_ATIVO else 'login')
+        if MS_ATIVO:
+            return redirect(url_for('login'))
 
         email = request.form.get('email', '').strip().lower()
         senha = request.form.get('senha', '')
@@ -158,10 +183,49 @@ def configurar(app):
                          aviso='Sua conta ainda não foi ativada. Abra o link que enviamos para o seu e-mail.'), 403
         return _entrar(usuario)
 
+    @app.route('/login/microsoft')
+    def login_microsoft():
+        if not MS_ATIVO:
+            return redirect(url_for('login'))
+        redirect_uri = MS_REDIRECT_URI or url_for('auth_callback', _external=True)
+        try:
+            session['fluxo_login'] = _cliente_microsoft().initiate_auth_code_flow(scopes=[], redirect_uri=redirect_uri)
+        except Exception:
+            # tenant errado ou Microsoft fora do ar: o MSAL não consegue ler a configuração do tenant
+            logger.exception('Não foi possível iniciar o login Microsoft (confira MS_TENANT_ID)')
+            return _tela('microsoft', erro='O login com a conta Microsoft está indisponível agora. Tente de novo mais tarde.'), 503
+        return redirect(session['fluxo_login']['auth_uri'])
+
+    @app.route('/auth/callback')
+    def auth_callback():
+        if not MS_ATIVO:
+            return redirect(url_for('login'))
+        fluxo = session.pop('fluxo_login', None)
+        if not fluxo:
+            return redirect(url_for('login'))
+        try:
+            resultado = _cliente_microsoft().acquire_token_by_auth_code_flow(fluxo, request.args.to_dict())
+        except ValueError:
+            # state inválido ou fluxo expirado: recomeça o login
+            return redirect(url_for('login'))
+        if 'error' in resultado:
+            logger.warning('Falha no login Microsoft: %s', resultado.get('error_description') or resultado.get('error'))
+            return _tela('microsoft', erro='Não foi possível entrar com a conta Microsoft. Tente de novo.'), 403
+        claims = resultado.get('id_token_claims') or {}
+        email = (claims.get('preferred_username') or claims.get('email') or '').strip().lower()
+        if not email_permitido(email):
+            logger.warning('Login Microsoft recusado (fora do domínio): %s', email)
+            return _tela('microsoft', erro=f'Entre com a sua conta @{DOMINIO_PERMITIDO}.'), 403
+        # mesma conta de quem já tinha cadastro com senha: o histórico de downloads continua ligado a ela
+        usuario = registro.usuario_microsoft(claims.get('name') or email.split('@')[0], email,
+                                             generate_password_hash(secrets.token_hex(32)))
+        logger.info('Login Microsoft: %s', email)
+        return _entrar(usuario)
+
     @app.route('/cadastro', methods=['GET', 'POST'])
     def cadastro():
-        if not LOGIN_ATIVO:
-            return redirect('/')
+        if not LOGIN_ATIVO or MS_ATIVO:
+            return redirect(url_for('login') if MS_ATIVO else '/')
         if request.method == 'GET':
             return _tela('cadastro')
 
@@ -190,8 +254,8 @@ def configurar(app):
 
     @app.route('/confirmar/<token>')
     def confirmar(token):
-        if not LOGIN_ATIVO:
-            return redirect('/')
+        if not LOGIN_ATIVO or MS_ATIVO:
+            return redirect(url_for('login') if MS_ATIVO else '/')
         try:
             dados = _assinador().loads(token, max_age=VALIDADE_LINK)
         except SignatureExpired:
@@ -212,8 +276,8 @@ def configurar(app):
 
     @app.route('/confirmar/reenviar', methods=['POST'])
     def reenviar_confirmacao():
-        if not LOGIN_ATIVO:
-            return redirect('/')
+        if not LOGIN_ATIVO or MS_ATIVO:
+            return redirect(url_for('login') if MS_ATIVO else '/')
         email = request.form.get('email', '').strip().lower()
         usuario = registro.buscar_usuario(email) if email_permitido(email) else None
         if usuario and not usuario['confirmado_em']:
@@ -285,7 +349,15 @@ TELA_ACESSO = """<!DOCTYPE html>
 <header class="topbar"><img class="logo-app" src="/static/logo.svg" alt="" width="34" height="34"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></header>
 <div class="conteudo">
 <main class="card">
-  {% if modo == 'login' %}
+  {% if modo == 'microsoft' %}
+  <h1>Entrar</h1>
+  <p class="sub">D4Sign Downloader</p>
+  {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
+  <p class="texto">Use a sua conta Microsoft da Sitawi (@{{ dominio }}).</p>
+  <form method="get" action="/login/microsoft">
+    <button type="submit" autofocus>Entrar com a conta Microsoft</button>
+  </form>
+  {% elif modo == 'login' %}
   <h1>Entrar</h1>
   <p class="sub">D4Sign Downloader</p>
   {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
@@ -343,63 +415,3 @@ EMAIL_CONFIRMACAO = """<!DOCTYPE html>
   </td></tr></table>
 </body></html>"""
 
-
-# ---------------------------------------------------------------------------------------------
-# Login com conta Microsoft (Microsoft Entra ID) — DESATIVADO, aguardando liberação do T.I.
-#
-# Para ativar: registrar o app no Entra (single-tenant, redirect URI <site>/auth/callback),
-# configurar MS_CLIENT_ID, MS_TENANT_ID e MS_CLIENT_SECRET, descomentar `msal` no
-# requirements.txt e trocar as rotas /login, /cadastro e /logout acima pelas de baixo
-# (incluindo 'auth_callback' em ROTAS_PUBLICAS). O id da pessoa passa a ser o oid da Microsoft.
-#
-# import msal
-# from urllib.parse import quote
-#
-# CLIENT_ID = os.environ.get('MS_CLIENT_ID', '').strip()
-# TENANT_ID = os.environ.get('MS_TENANT_ID', '').strip()
-# CLIENT_SECRET = os.environ.get('MS_CLIENT_SECRET', '').strip()
-# REDIRECT_URI = os.environ.get('MS_REDIRECT_URI', '').strip()  # opcional; padrão: <site>/auth/callback
-#
-# def _cliente():
-#     return msal.ConfidentialClientApplication(
-#         CLIENT_ID,
-#         authority=f'https://login.microsoftonline.com/{TENANT_ID}',
-#         client_credential=CLIENT_SECRET,
-#     )
-#
-# def _redirect_uri():
-#     return REDIRECT_URI or url_for('auth_callback', _external=True)
-#
-# @app.route('/login')
-# def login():
-#     session['depois_do_login'] = _destino_seguro(request.args.get('next'))
-#     session['fluxo_login'] = _cliente().initiate_auth_code_flow(scopes=[], redirect_uri=_redirect_uri())
-#     return redirect(session['fluxo_login']['auth_uri'])
-#
-# @app.route('/auth/callback')
-# def auth_callback():
-#     fluxo = session.pop('fluxo_login', None)
-#     if not fluxo:
-#         return redirect(url_for('login'))
-#     try:
-#         resultado = _cliente().acquire_token_by_auth_code_flow(fluxo, request.args.to_dict())
-#     except ValueError:
-#         # state inválido ou fluxo expirado: recomeça o login
-#         return redirect(url_for('login'))
-#     if 'error' in resultado:
-#         logger.warning('Falha no login Microsoft: %s', resultado.get('error_description') or resultado.get('error'))
-#         return ('Não foi possível entrar com a conta Microsoft. Verifique se você usa a conta da empresa '
-#                 'e tente de novo.'), 403
-#     claims = resultado.get('id_token_claims') or {}
-#     return _entrar({
-#         'id': claims.get('oid') or claims.get('sub'),
-#         'nome': claims.get('name') or claims.get('preferred_username'),
-#         'email': claims.get('preferred_username') or claims.get('email'),
-#     })
-#
-# @app.route('/logout')
-# def logout():
-#     session.clear()
-#     volta = quote(url_for('index', _external=True), safe='')
-#     return redirect(f'https://login.microsoftonline.com/{TENANT_ID}/oauth2/v2.0/logout?post_logout_redirect_uri={volta}')
-# ---------------------------------------------------------------------------------------------
