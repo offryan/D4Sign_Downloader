@@ -38,3 +38,6 @@ ALTER TABLE usuarios ADD COLUMN confirmado_em TIMESTAMPTZ;
 
 -- Botão "×" da tag Baixado: a pessoa pode tirar a marcação de um documento
 -- GRANT DELETE ON TABLE downloads TO d4sign_app;
+
+-- Login com conta Microsoft: não precisa de tabela nova. A pessoa é achada em usuarios pelo e-mail
+-- (ou criada já confirmada), com os mesmos GRANTs de INSERT e UPDATE (confirmado_em) de cima.

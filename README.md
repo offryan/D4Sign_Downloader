@@ -20,7 +20,7 @@ App da equipe da Sitawi Finanças do Bem para baixar, em lote, os documentos ass
 
   A coluna **Baixado por** mostra quem baixou.
 - **Download:** baixa um documento ou vários num único `.zip`. O zip é enviado aos poucos, então lotes de centenas de documentos não pesam no servidor. Quem baixou o quê fica registrado no banco.
-- **Login:** e-mail e senha, só para e-mails `@sitawi.net`, com ativação por link enviado por e-mail. O login com conta Microsoft já está pronto em `auth.py`, esperando ser ativado.
+- **Login:** com a conta Microsoft da Sitawi quando o app está registrado no Entra ID. Sem esse registro, vale o login com e-mail e senha, só para e-mails `@sitawi.net`, com ativação por link enviado por e-mail.
 - **Visual:** cores da Sitawi, tema claro e escuro e layout próprio para celular.
 
 **Tecnologias:** Python e Flask, API da D4Sign, PostgreSQL no Supabase, e-mail pela Brevo. Hospedado no Render.
@@ -47,6 +47,8 @@ BREVO_API_KEY=xkeysib-...
 EMAIL_REMETENTE=remetente@exemplo.com
 ```
 
+Para o login com conta Microsoft, inclua também `MS_CLIENT_ID`, `MS_TENANT_ID` e `MS_CLIENT_SECRET` do app registrado no Entra ID (single-tenant, redirect URI do tipo Web `<site>/auth/callback`). Com as três, o login com senha sai do ar e cada pessoa continua com o histórico da conta do mesmo e-mail.
+
 Sem `DATABASE_URL`, o app roda sem login e guarda o histórico num arquivo local. Sem a Brevo, o link de confirmação aparece no log. As tabelas do banco estão em [`supabase.sql`](supabase.sql).
 
 3. Rode `python d4sign.py` e abra `http://localhost:5000`.
@@ -58,7 +60,7 @@ Sem `DATABASE_URL`, o app roda sem login e guarda o histórico num arquivo local
 | Arquivo | Função |
 |---|---|
 | `d4sign.py` | App Flask: lista, filtros e downloads |
-| `auth.py` | Login, cadastro e confirmação por e-mail |
+| `auth.py` | Login (conta Microsoft ou e-mail e senha), cadastro e confirmação por e-mail |
 | `registro.py` | Contas e histórico de downloads |
 | `email_envio.py` | Envio de e-mails |
 | `supabase.sql` | Tabelas e permissões do banco |
