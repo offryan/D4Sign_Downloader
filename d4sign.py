@@ -310,8 +310,8 @@ TEMPLATE = r"""<!DOCTYPE html>
         }
         /* Rodapé com os créditos: pequeno e apagado, só uma menção */
         .creditos{max-width:1400px;margin:0 auto;padding:0 28px 24px;text-align:center;font-size:12px;color:var(--muted);opacity:.7}
-        .creditos a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-        .creditos a:hover{color:var(--text-color)}
+        .creditos a{display:inline-flex;align-items:center;gap:6px;color:inherit;text-decoration:none}
+        .creditos a:hover{color:var(--text-color);text-decoration:underline;text-underline-offset:2px}
         /* Seta de voltar ao topo: só no celular, depois de rolar a lista; fica acima da barra de download */
         .voltar-topo{display:none;position:fixed;right:16px;bottom:calc(140px + env(safe-area-inset-bottom));z-index:1500;width:46px;height:46px;align-items:center;justify-content:center;border:0;border-radius:999px;background:var(--accent);color:var(--accent-text);box-shadow:0 4px 14px rgba(0,0,0,.22);cursor:pointer}
         .voltar-topo:hover{background:var(--accent-hover)}
@@ -502,7 +502,7 @@ TEMPLATE = r"""<!DOCTYPE html>
     <template id="icon-sun-tpl"><span class="sort-icon">{{ ICON_SUN|safe }}</span></template>
     <template id="icon-moon-tpl"><span class="sort-icon">{{ ICON_MOON|safe }}</span></template>
     </div>
-    <footer class="creditos">Criado por <a href="https://github.com/offryan" target="_blank" rel="noopener">Ryan G. Santos</a></footer>
+    <footer class="creditos"><a href="https://github.com/offryan" target="_blank" rel="noopener" title="Ryan G. Santos no GitHub"><svg class="gh" viewBox="0 0 16 16" width="14" height="14" aria-hidden="true" fill="currentColor"><path d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27.68 0 1.36.09 2 .27 1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.013 8.013 0 0016 8c0-4.42-3.58-8-8-8z"/></svg>Desenvolvedor</a></footer>
 
         <div id="downloadModal" class="modal">
         <div class="modal-content">
