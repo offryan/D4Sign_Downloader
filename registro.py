@@ -168,6 +168,23 @@ def confirmar_usuario(usuario_id):
     return dict(zip(CAMPOS_USUARIO, linha)) if linha else None
 
 
+def usuario_microsoft(nome, email, senha_hash):
+    """Conta de quem entrou com a conta Microsoft, achada pelo e-mail (cria se for o primeiro acesso).
+
+    Quem já tinha cadastro com senha continua com o mesmo id, e o histórico de downloads segue ligado
+    a ele. A conta nova já nasce confirmada (a Microsoft garantiu o e-mail) e recebe uma senha
+    aleatória que ninguém conhece, só para preencher a coluna.
+    """
+    with _pool.connection() as conn:
+        with conn.cursor() as cur:
+            cur.execute("""INSERT INTO usuarios (nome, email, senha_hash, confirmado_em) VALUES (%s, %s, %s, now())
+                           ON CONFLICT (email) DO UPDATE SET confirmado_em = COALESCE(usuarios.confirmado_em, now())
+                           RETURNING id, nome, email, senha_hash, confirmado_em""",
+                        (nome, email, senha_hash))
+            linha = cur.fetchone()
+    return dict(zip(CAMPOS_USUARIO, linha))
+
+
 def _ler_arquivo():
     try:
         with open(ARQUIVO_LOCAL, 'r', encoding='utf-8') as f:
