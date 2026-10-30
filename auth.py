@@ -303,25 +303,35 @@ TELA_ACESSO = """<!DOCTYPE html>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
 <link rel="icon" href="/static/logo.svg" type="image/svg+xml">
-<title>{{ {'login': 'Entrar', 'cadastro': 'Criar conta'}.get(modo, 'Confirme seu e-mail') }} · D4Sign Downloader</title>
+<title>{{ {'login': 'Entrar', 'microsoft': 'Entrar', 'cadastro': 'Criar conta'}.get(modo, 'Confirme seu e-mail') }} · D4Sign Downloader</title>
 <style>
   /* mesma identidade visual da página principal (Tema Sitawi): creme, grafite e azul #276DBD */
-  :root{--card-bg:#fff;--page-bg:#F2F1EA;--muted:#5F5E57;--border:#E3E1D6;--text-color:#282828;--accent:#276DBD;--accent-hover:#1F5A9E;--accent-soft:#E4EDF8;--btn-text:#fff;--topbar-bg:#276DBD;--topbar-text:#E8E8DC;--erro-bg:#FDECE2;--erro-text:#A33B00;--aviso-bg:#E4EDF8;--aviso-text:#1F5A9E}
-  .dark-mode{--card-bg:#242423;--page-bg:#1B1B1A;--muted:#A9A89E;--border:#3A3936;--text-color:#E8E8DC;--accent:#5B9BE0;--accent-hover:#7DB1E8;--accent-soft:#1E3550;--btn-text:#111;--topbar-bg:#1F4F88;--erro-bg:#3D1E0B;--erro-text:#FFC6A3;--aviso-bg:#1E3550;--aviso-text:#C7DDF5}
+  :root{--card-bg:#fff;--page-bg:#F2F1EA;--muted:#5F5E57;--border:#E3E1D6;--text-color:#282828;--accent:#276DBD;--accent-hover:#1F5A9E;--accent-soft:#E4EDF8;--btn-text:#fff;--painel-bg:#276DBD;--painel-text:#E8E8DC;--erro-bg:#FDECE2;--erro-text:#A33B00;--aviso-bg:#E4EDF8;--aviso-text:#1F5A9E;--ms-bg:#fff;--ms-text:#5E5E5E;--ms-border:#8C8C8C;--ms-hover:#F3F3F3}
+  .dark-mode{--card-bg:#242423;--page-bg:#1B1B1A;--muted:#A9A89E;--border:#3A3936;--text-color:#E8E8DC;--accent:#5B9BE0;--accent-hover:#7DB1E8;--accent-soft:#1E3550;--btn-text:#111;--painel-bg:#1F4F88;--erro-bg:#3D1E0B;--erro-text:#FFC6A3;--aviso-bg:#1E3550;--aviso-text:#C7DDF5;--ms-bg:#2F2F2F;--ms-text:#fff;--ms-border:#2F2F2F;--ms-hover:#3B3B3B}
   *,*::before,*::after{box-sizing:border-box}
   html:has(body.dark-mode){background:#1B1B1A}
   html{height:100%}
   html,body{margin:0;background:var(--page-bg);color:var(--text-color);font-family:"Segoe UI", system-ui, -apple-system, Roboto, Arial, sans-serif}
-  body{min-height:100%;display:flex;flex-direction:column}
-  .topbar{background:var(--topbar-bg);color:var(--topbar-text);padding:14px 28px;display:flex;align-items:baseline;gap:14px}
-  .logo-app{display:block;flex:none;align-self:center;width:34px;height:34px}
-  .wordmark{font-weight:700;font-size:30px;letter-spacing:-.04em;line-height:1}
-  .app-nome{font-size:15px;font-weight:600;opacity:.9}
-  .conteudo{flex:1;display:flex;align-items:center;justify-content:center;padding:32px 16px}
-  .creditos{padding:0 16px 20px;text-align:center;font-size:12px;color:var(--muted);opacity:.7}
+  body{min-height:100%;display:grid;grid-template-columns:minmax(360px,42%) 1fr}
+  /* painel da marca: logo oficial da Sitawi sobre o azul */
+  .painel{background:var(--painel-bg);color:var(--painel-text);padding:48px 56px;display:flex;flex-direction:column;justify-content:space-between;gap:40px;position:relative;overflow:hidden}
+  .painel::after{content:"";position:absolute;right:-120px;bottom:-120px;width:360px;height:360px;border-radius:50%;background:rgba(232,232,220,.07);pointer-events:none}
+  .logo-sitawi{display:block;width:220px;height:auto}
+  .painel-meio{max-width:420px}
+  .app-selo{display:flex;align-items:center;gap:12px;margin-bottom:20px}
+  .app-selo img{width:44px;height:44px;border-radius:10px}
+  .app-selo span{font-size:15px;font-weight:600;letter-spacing:.01em;opacity:.92}
+  .painel h2{margin:0 0 12px;font-size:34px;line-height:1.15;letter-spacing:-.02em;color:#fff}
+  .painel p{margin:0;font-size:16px;line-height:1.55;opacity:.88}
+  .creditos{font-size:12px;opacity:.75}
   .creditos a{color:inherit;text-decoration:underline;text-underline-offset:2px}
-  .creditos a:hover{color:var(--text-color)}
-  .card{width:100%;max-width:420px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:32px;box-shadow:0 1px 2px rgba(40,40,40,.04), 0 6px 20px rgba(40,40,40,.06)}
+  .lado{display:flex;flex-direction:column;align-items:center;justify-content:center;padding:40px 24px}
+  .lado .creditos{display:none;margin-top:20px;color:var(--muted)}
+  .card{width:100%;max-width:420px;background:var(--card-bg);border:1px solid var(--border);border-radius:16px;padding:36px;box-shadow:0 1px 2px rgba(40,40,40,.04), 0 6px 20px rgba(40,40,40,.06)}
+  .card-topo{display:none}
+  .logo-card{display:block;width:150px;height:auto;margin:0 0 22px}
+  .logo-card.escuro, .dark-mode .logo-card.claro{display:none}
+  .dark-mode .logo-card.escuro{display:block}
   h1{margin:0 0 6px;font-size:26px;letter-spacing:-0.02em}
   .sub{margin:0 0 24px;color:var(--muted);font-size:15px}
   form{display:flex;flex-direction:column;gap:16px}
@@ -330,14 +340,27 @@ TELA_ACESSO = """<!DOCTYPE html>
   input:focus{outline:none;border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-soft)}
   button{margin-top:4px;height:46px;border:0;border-radius:10px;background:var(--accent);color:var(--btn-text);font:inherit;font-size:15px;font-weight:600;cursor:pointer}
   button:hover{background:var(--accent-hover)}
+  button:focus-visible{outline:none;box-shadow:0 0 0 3px var(--accent-soft), 0 0 0 5px var(--accent)}
+  /* botão no padrão "Entrar com a Microsoft": fundo neutro e o logo de quatro quadrados */
+  button.ms{display:flex;align-items:center;justify-content:center;gap:12px;background:var(--ms-bg);color:var(--ms-text);border:1px solid var(--ms-border);border-radius:6px}
+  button.ms:hover{background:var(--ms-hover)}
+  .ms-logo{width:21px;height:21px;flex:none}
   .erro,.aviso{margin:0 0 16px;padding:12px 14px;border-radius:10px;background:var(--erro-bg);color:var(--erro-text);font-size:14px}
   .aviso{background:var(--aviso-bg);color:var(--aviso-text)}
   .texto{margin:0 0 20px;font-size:15px;line-height:1.55}
+  .nota{margin:18px 0 0;font-size:13px;line-height:1.5;color:var(--muted)}
   button.secundario{background:transparent;color:var(--text-color);border:1px solid var(--border)}
   button.secundario:hover{border-color:var(--muted)}
   .troca{margin:20px 0 0;text-align:center;font-size:14px;color:var(--muted)}
   .troca a{color:var(--accent);font-weight:600}
-  @media (max-width:480px){.card{padding:24px}.topbar{padding:12px 16px}.wordmark{font-size:26px}.logo-app{width:30px;height:30px}}
+  /* tablet e celular: o painel sai e o logo vai para dentro do cartão */
+  @media (max-width:860px){
+    body{grid-template-columns:1fr}
+    .painel{display:none}
+    .lado{justify-content:flex-start;padding:32px 16px}
+    .card{padding:28px 24px}
+    .card-topo, .lado .creditos{display:block}
+  }
 </style>
 <script>
   // mesmo tema escolhido na página principal (abre no claro; escuro só se a pessoa escolheu)
@@ -346,17 +369,32 @@ TELA_ACESSO = """<!DOCTYPE html>
 </head>
 <body>
 <script>if(document.documentElement.classList.contains('tema-escuro')) document.body.classList.add('dark-mode');</script>
-<header class="topbar"><img class="logo-app" src="/static/logo.svg" alt="" width="34" height="34"><span class="wordmark" aria-label="Sitawi">stwi</span><span class="app-nome">D4Sign Downloader</span></header>
-<div class="conteudo">
+<aside class="painel">
+  <img class="logo-sitawi" src="/static/sitawi-branco.svg" alt="Sitawi Finanças do Bem" width="220" height="45">
+  <div class="painel-meio">
+    <div class="app-selo"><img src="/static/logo.svg" alt="" width="44" height="44"><span>D4Sign Downloader</span></div>
+    <h2>Documentos assinados, num só lugar</h2>
+    <p>Lista os documentos finalizados de todos os cofres da D4Sign, baixa um a um ou em lote e mostra quem da equipe já baixou cada um.</p>
+  </div>
+  <div class="creditos">Criado por <a href="https://github.com/offryan" target="_blank" rel="noopener">Ryan G. Santos</a></div>
+</aside>
+<div class="lado">
 <main class="card">
+  <div class="card-topo">
+    <img class="logo-card claro" src="/static/sitawi-preto.svg" alt="Sitawi Finanças do Bem" width="150" height="31">
+    <img class="logo-card escuro" src="/static/sitawi-branco.svg" alt="Sitawi Finanças do Bem" width="150" height="31">
+  </div>
   {% if modo == 'microsoft' %}
   <h1>Entrar</h1>
   <p class="sub">D4Sign Downloader</p>
   {% if erro %}<p class="erro" role="alert">{{ erro }}</p>{% endif %}
-  <p class="texto">Use a sua conta Microsoft da Sitawi (@{{ dominio }}).</p>
   <form method="get" action="/login/microsoft">
-    <button type="submit" autofocus>Entrar com a conta Microsoft</button>
+    <button type="submit" class="ms" autofocus>
+      <svg class="ms-logo" viewBox="0 0 21 21" aria-hidden="true"><rect x="1" y="1" width="9" height="9" fill="#F25022"/><rect x="11" y="1" width="9" height="9" fill="#7FBA00"/><rect x="1" y="11" width="9" height="9" fill="#00A4EF"/><rect x="11" y="11" width="9" height="9" fill="#FFB900"/></svg>
+      Entrar com a conta Microsoft
+    </button>
   </form>
+  <p class="nota">Use a sua conta da Sitawi (@{{ dominio }}), a mesma do Outlook e do Teams.</p>
   {% elif modo == 'login' %}
   <h1>Entrar</h1>
   <p class="sub">D4Sign Downloader</p>
@@ -393,8 +431,8 @@ TELA_ACESSO = """<!DOCTYPE html>
   <p class="troca"><a href="/login">Voltar para o login</a></p>
   {% endif %}
 </main>
+<div class="creditos">Criado por <a href="https://github.com/offryan" target="_blank" rel="noopener">Ryan G. Santos</a></div>
 </div>
-<footer class="creditos">Criado por <a href="https://github.com/offryan" target="_blank" rel="noopener">Ryan G. Santos</a></footer>
 </body>
 </html>"""
 
