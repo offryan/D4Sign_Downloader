@@ -73,6 +73,15 @@ Cada pessoa é ligada pela conta do mesmo e-mail na tabela `usuarios`, então qu
 
 Crie um *Web Service* ligado a este repositório, com build `pip install -r requirements.txt`, início `python d4sign.py` e as mesmas variáveis do `.env`.
 
+### Manter o Supabase ativo
+
+No plano grátis, o Supabase pausa o projeto depois de uma semana sem uso, e o Render também dorme sem acesso. O agendamento [`manter-supabase-ativo.yml`](.github/workflows/manter-supabase-ativo.yml) faz uma consulta simples no banco a cada 3 dias.
+
+1. Em **Settings > Secrets and variables > Actions**, crie o segredo `DATABASE_URL` com o mesmo valor do Render.
+2. Em **Actions > Manter o Supabase ativo**, clique em **Run workflow** uma vez para conferir.
+
+O GitHub desliga agendamentos de repositórios públicos depois de 60 dias sem nenhum commit. Se isso acontecer, ele avisa por e-mail; basta reativar em **Actions**.
+
 ## Estrutura
 
 | Arquivo | Função |
@@ -82,6 +91,7 @@ Crie um *Web Service* ligado a este repositório, com build `pip install -r requ
 | `registro.py` | Contas e histórico de downloads por pessoa |
 | `email_envio.py` | Envio de e-mails pela Brevo ou por SMTP |
 | `supabase.sql` | Tabelas e permissões do banco |
+| `.github/workflows/manter-supabase-ativo.yml` | Consulta o banco a cada 3 dias para o Supabase não pausar |
 | `static/` | Logo do app e logos oficiais da Sitawi |
 | `docs/` | Capturas usadas neste README |
 
