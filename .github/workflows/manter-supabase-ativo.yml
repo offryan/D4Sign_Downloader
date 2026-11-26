@@ -1,0 +1,35 @@
+# Mantém o banco do Supabase ativo.
+# No plano grátis, o Supabase pausa o projeto depois de uma semana sem uso. O app roda no Render,
+# que também dorme sem acesso, então uma rotina dentro do próprio app não resolve. Este agendamento
+# faz uma consulta simples no banco a cada 3 dias.
+# Precisa do segredo DATABASE_URL no repositório (Settings > Secrets and variables > Actions),
+# com o mesmo valor usado no Render.
+name: Manter o Supabase ativo
+
+on:
+  schedule:
+    - cron: "17 12 */3 * *"   # a cada 3 dias, às 12h17 UTC (09h17 em Brasília)
+  workflow_dispatch:          # botão "Run workflow" para rodar na hora
+
+permissions:
+  contents: read
+
+jobs:
+  consultar-banco:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - name: Instalar o cliente do PostgreSQL, se faltar
+        run: command -v psql || (sudo apt-get update -q && sudo apt-get install -y -q postgresql-client)
+
+      - name: Consultar o banco
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+        run: |
+          if [ -z "$DATABASE_URL" ]; then
+            echo "::error::Segredo DATABASE_URL não configurado no repositório."
+            exit 1
+          fi
+          # Consulta mínima numa tabela do app; o resultado não vai para o log (o repositório é público).
+          psql "$DATABASE_URL" -v ON_ERROR_STOP=1 -tAq -c "select 1 from downloads limit 1" > /dev/null
+          echo "Banco consultado em $(date -u '+%Y-%m-%d %H:%M') UTC."
